@@ -129,7 +129,7 @@ if (typeof L !== 'undefined') {
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isAppReady, setIsAppReady] = useState(false); // New state to manage app readiness
+  const [appInitialized, setAppInitialized] = useState(false); // State to manage app readiness
   const [weatherData, setWeatherData] = useState(null);
   const [locationError, setLocationError] = useState('');
   const [loadingWeather, setLoadingWeather] = useState(true);
@@ -147,13 +147,12 @@ const App = () => {
   const OPENWEATHER_API_KEY = 'c006710ad501bdbe1d47d7d180d51f64';
 
 
-  // 1. Conditional return must be placed after all hooks.
+  // Conditional rendering for the password gate and loading screen
   if (!isAuthenticated) {
     return <PasswordGate onAuthenticated={() => setIsAuthenticated(true)} />;
   }
-  
-  // 2. If the app isn't ready yet, show a loading screen.
-  if (!isAppReady) {
+
+  if (!appInitialized) {
     return (
       <div className="min-h-screen rally-bg font-inter flex items-center justify-center p-4">
         <div className="text-center">
@@ -164,11 +163,10 @@ const App = () => {
     );
   }
 
-  // --- App Initialization and Asynchronous Operations ---
-  // Combine all setup logic into a single useEffect to control the loading state
+  // Effect to handle all app initialization logic once authenticated
   useEffect(() => {
     const initApp = async () => {
-      // Firebase Initialization
+      // Firebase Initialization and Authentication
       try {
         const firebaseConfig = {
           apiKey: "AIzaSyDlT5sCVMBZSWqYTu9hhstp4Fr7N66SWss",
@@ -195,19 +193,17 @@ const App = () => {
           setLocationError("Failed to sign in anonymously. Community features may not work.");
         }
 
-        const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+        const unsubscribeAuth = onAuthStateChanged(firebaseAuth, (user) => {
           if (user) {
             setUserId(user.uid);
             setIsAuthReady(true);
-            console.log("Firebase User ID:", user.uid);
           } else {
             setUserId(null);
             setIsAuthReady(true);
-            console.log("No Firebase user is signed in.");
           }
         });
-
-        // Geolocation Initialization
+        
+        // Geolocation and weather data
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(
             (position) => {
@@ -230,17 +226,19 @@ const App = () => {
           setShowGeolocationTip(true);
         }
 
-        // Finalize app readiness
-        setIsAppReady(true);
-        return () => unsubscribe();
+        setAppInitialized(true); // App is now ready
+        return () => unsubscribeAuth();
       } catch (error) {
         console.error("Error initializing app:", error);
         setLocationError("Failed to initialize app services.");
-        setIsAppReady(true); // Still set to true to show the error
+        setAppInitialized(true);
       }
     };
-    initApp();
-  }, []);
+
+    if (isAuthenticated && !appInitialized) {
+      initApp();
+    }
+  }, [isAuthenticated, appInitialized]);
 
   // Effect to fetch weather data
   const fetchWeather = async (lat, lon) => {
@@ -272,7 +270,7 @@ const App = () => {
 
   // Effect to initialize and update the map and add flood markers
   useEffect(() => {
-    if (typeof L === 'undefined' || !isAppReady) {
+    if (typeof L === 'undefined' || !appInitialized) {
       return;
     }
     if (!mapRef.current) {
@@ -325,7 +323,7 @@ const App = () => {
         floodMarkersRef.current.push(marker);
       });
     }
-  }, [userLatLon, OPENWEATHER_API_KEY, floodReports, isAppReady]);
+  }, [userLatLon, OPENWEATHER_API_KEY, floodReports, appInitialized]);
 
   const getFloodLevelColor = (level) => {
     switch (level) {
@@ -342,7 +340,6 @@ const App = () => {
     if (db && isAuthReady) {
       const effectiveAppId = "faceattendancerealtime-fbdf2";
       const floodReportsRef = ref(db, `artifacts/${effectiveAppId}/public/data/currentFloodStatusByUsers`);
-      console.log("Fetching flood reports from RTDB path:", `artifacts/${effectiveAppId}/public/data/currentFloodStatusByUsers`);
       const unsubscribe = onValue(floodReportsRef, (snapshot) => {
         const data = snapshot.val();
         const reports = [];
@@ -831,7 +828,6 @@ const FloodReporter = ({ userLat, userLon, db, userId, isAuthReady }) => {
           <option value="Minor Injury"> Minor Injury - May konting gasgas lang or sprain.</option>
           <option value="Medical Assistance">Medical Assistance - Need ng aid, like first aid or water.</option>
           <option value="Urgent Care Needed"> Urgent Care Needed - Masakit na, need a medic right away.</option>
-          <option value="Emergency Situation"> Help Me - Grabe, nasa emergency situation ako.</option>
         </select>
       </div>
       <label className="block font-semibold text-gray-700 mb-2">Additional Details (optional):</label>
