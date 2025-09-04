@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getDatabase, ref, set, onValue } from 'firebase/database';
 
-// A custom modal component to replace alert and confirm.
+// A custom modal component to replace alert and confirm
 const CustomMessageModal = ({ message, onConfirm, onCancel }) => {
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full flex items-center justify-center z-50">
