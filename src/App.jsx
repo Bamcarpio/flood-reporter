@@ -59,7 +59,7 @@ const App = () => {
     e.preventDefault();
     // The password can be accessed from an environment variable in Vercel.
     // We check if 'process' exists to avoid the ReferenceError in the browser.
-    const vercelPassword = (typeof process !== 'undefined' && process.env.REACT_APP_PASSWORD_KEY) || 'onepeaceNAKAMA13';
+    const vercelPassword = (typeof process !== 'undefined' && process.env.REACT_APP_PASSWORD_KEY);
     const providedPassword = passwordInput.trim();
 
     if (providedPassword === vercelPassword) {

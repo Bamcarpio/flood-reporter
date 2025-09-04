@@ -60,7 +60,7 @@ const App = () => {
     // The password can be accessed from an environment variable in Vercel.
     // For local testing, it's 'onepeaceNAKAMA13'.
     // In a Vercel project, you would set an environment variable named 'REACT_APP_PASSWORD_KEY'.
-    const vercelPassword = process.env.REACT_APP_PASSWORD_KEY || 'onepeaceNAKAMA13';
+    const vercelPassword = process.env.REACT_APP_PASSWORD_KEY;
     const providedPassword = passwordInput.trim();
 
     if (providedPassword === vercelPassword) {
