@@ -128,9 +128,8 @@ if (typeof L !== 'undefined') {
 }
 
 const App = () => {
-  // All hooks must be at the top of the component to follow React's rules.
-  // This is the fix for the white screen error.
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAppReady, setIsAppReady] = useState(false); // New state to manage app readiness
   const [weatherData, setWeatherData] = useState(null);
   const [locationError, setLocationError] = useState('');
   const [loadingWeather, setLoadingWeather] = useState(true);
@@ -147,14 +146,29 @@ const App = () => {
   const mapSectionRef = useRef(null);
   const OPENWEATHER_API_KEY = 'c006710ad501bdbe1d47d7d180d51f64';
 
-  // Conditional return must come AFTER all the hooks.
+
+  // 1. Conditional return must be placed after all hooks.
   if (!isAuthenticated) {
     return <PasswordGate onAuthenticated={() => setIsAuthenticated(true)} />;
   }
+  
+  // 2. If the app isn't ready yet, show a loading screen.
+  if (!isAppReady) {
+    return (
+      <div className="min-h-screen rally-bg font-inter flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-white text-lg">Loading App...</p>
+        </div>
+      </div>
+    );
+  }
 
-  // Firebase Initialization and Authentication
+  // --- App Initialization and Asynchronous Operations ---
+  // Combine all setup logic into a single useEffect to control the loading state
   useEffect(() => {
-    const initFirebase = async () => {
+    const initApp = async () => {
+      // Firebase Initialization
       try {
         const firebaseConfig = {
           apiKey: "AIzaSyDlT5sCVMBZSWqYTu9hhstp4Fr7N66SWss",
@@ -166,12 +180,12 @@ const App = () => {
           appId: "1:338410759674:web:c6820d269c0029128a3043",
           measurementId: "G-NQDD7MCT09"
         };
-        const effectiveAppId = firebaseConfig.projectId;
         const app = initializeApp(firebaseConfig);
         const realtimeDb = getDatabase(app);
         const firebaseAuth = getAuth(app);
         setDb(realtimeDb);
         setAuth(firebaseAuth);
+
         try {
           if (!firebaseAuth.currentUser) {
             await signInAnonymously(firebaseAuth);
@@ -180,6 +194,7 @@ const App = () => {
           console.error("Firebase anonymous authentication error:", error);
           setLocationError("Failed to sign in anonymously. Community features may not work.");
         }
+
         const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
           if (user) {
             setUserId(user.uid);
@@ -191,39 +206,43 @@ const App = () => {
             console.log("No Firebase user is signed in.");
           }
         });
-        return () => unsubscribe();
-      } catch (error) {
-        console.error("Error initializing Firebase:", error);
-        setLocationError("Failed to initialize Firebase services. Community features may not work.");
-      }
-    };
-    initFirebase();
-  }, []);
 
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          setUserLatLon({ lat: latitude, lon: longitude });
-          fetchWeather(latitude, longitude);
-          setShowGeolocationTip(false);
-        },
-        (error) => {
-          console.error("Geolocation error:", error);
-          setLocationError('Unable to retrieve your location. Displaying weather for Bulacan. Please ensure location permissions are granted in your browser settings.');
+        // Geolocation Initialization
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              const { latitude, longitude } = position.coords;
+              setUserLatLon({ lat: latitude, lon: longitude });
+              fetchWeather(latitude, longitude);
+              setShowGeolocationTip(false);
+            },
+            (error) => {
+              console.error("Geolocation error:", error);
+              setLocationError('Unable to retrieve your location. Displaying weather for Bulacan. Please ensure location permissions are granted in your browser settings.');
+              fetchWeather(userLatLon.lat, userLatLon.lon);
+              setShowGeolocationTip(true);
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+          );
+        } else {
+          setLocationError('Geolocation is not supported by your browser. Displaying weather for Manila.');
           fetchWeather(userLatLon.lat, userLatLon.lon);
           setShowGeolocationTip(true);
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
-    } else {
-      setLocationError('Geolocation is not supported by your browser. Displaying weather for Manila.');
-      fetchWeather(userLatLon.lat, userLatLon.lon);
-      setShowGeolocationTip(true);
-    }
+        }
+
+        // Finalize app readiness
+        setIsAppReady(true);
+        return () => unsubscribe();
+      } catch (error) {
+        console.error("Error initializing app:", error);
+        setLocationError("Failed to initialize app services.");
+        setIsAppReady(true); // Still set to true to show the error
+      }
+    };
+    initApp();
   }, []);
 
+  // Effect to fetch weather data
   const fetchWeather = async (lat, lon) => {
     setLoadingWeather(true);
     if (OPENWEATHER_API_KEY === 'YOUR_OPENWEATHERMAP_API_KEY' || !OPENWEATHER_API_KEY) {
@@ -251,9 +270,9 @@ const App = () => {
     }
   };
 
+  // Effect to initialize and update the map and add flood markers
   useEffect(() => {
-    if (typeof L === 'undefined') {
-      console.warn("Leaflet (L) is not loaded. Please ensure you have added the Leaflet CDN script to your index.html.");
+    if (typeof L === 'undefined' || !isAppReady) {
       return;
     }
     if (!mapRef.current) {
@@ -306,7 +325,7 @@ const App = () => {
         floodMarkersRef.current.push(marker);
       });
     }
-  }, [userLatLon, OPENWEATHER_API_KEY, floodReports]);
+  }, [userLatLon, OPENWEATHER_API_KEY, floodReports, isAppReady]);
 
   const getFloodLevelColor = (level) => {
     switch (level) {
