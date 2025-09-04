@@ -51,7 +51,7 @@ const PasswordGate = ({ onAuthenticated }) => {
   const [loading, setLoading] = useState(false);
   const [correctPassword, setCorrectPassword] = useState('');
 
-  // Fetch the password from the Vercel serverless function on component mount
+  // Fetch the password from the Vercel serverless function on component moun
   useEffect(() => {
     const fetchPassword = async () => {
       setLoading(true);
