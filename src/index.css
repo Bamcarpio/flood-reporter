@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Reset styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Body layout and font */
+body {
+  @apply min-h-screen w-full bg-white text-gray-900 font-sans antialiased;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Headings */
+h1 {
+  @apply text-4xl font-bold leading-tight;
+}
+
+/* Anchor styling */
+a {
+  @apply text-blue-600 font-medium no-underline transition hover:text-blue-800;
+}
+
+/* Button styling */
+button {
+  @apply bg-blue-600 text-white px-4 py-2 rounded-lg border border-transparent font-medium transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400;
+}
+
+/* Input fields */
+input, textarea, select {
+  @apply w-full p-3 rounded-md border border-gray-300 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400;
+}
+
+/* Optional container utility if you use it */
+.container {
+  @apply max-w-2xl mx-auto px-4;
+}
