@@ -54,24 +54,29 @@ const App = () => {
     setModal({ ...modal, isOpen: false });
   };
 
-  // New function to handle password submission
-  const handlePasswordSubmit = (e) => {
-    e.preventDefault();
-    // The password can be accessed from an environment variable in Vercel.
-    // We check if 'process' exists to avoid the ReferenceError in the browser.
-    const vercelPassword = (typeof process !== 'undefined' && process.env.REACT_APP_PASSWORD_KEY);
-    const providedPassword = passwordInput.trim();
+const handlePasswordSubmit = async (e) => {
+  e.preventDefault();
+  try {
+    const response = await fetch('/api/checkPassword', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ password: passwordInput.trim() }),
+    });
+    const data = await response.json();
 
-    if (providedPassword === vercelPassword) {
+    if (data.success) {
       setIsAuthenticated(true);
       setPasswordError('');
-      // Persist authentication status in local storage
       localStorage.setItem('isAuthenticated', 'true');
     } else {
       setPasswordError('Incorrect password. Please try again.');
     }
-  };
-
+  } catch (error) {
+    setPasswordError('An error occurred. Please try again.');
+  }
+};
   // Function to handle logout
   const handleLogout = () => {
     setIsAuthenticated(false);
