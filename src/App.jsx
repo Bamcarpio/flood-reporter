@@ -128,6 +128,8 @@ if (typeof L !== 'undefined') {
 }
 
 const App = () => {
+  // All hooks must be at the top of the component to follow React's rules.
+  // This is the fix for the white screen error.
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [weatherData, setWeatherData] = useState(null);
   const [locationError, setLocationError] = useState('');
@@ -145,7 +147,7 @@ const App = () => {
   const mapSectionRef = useRef(null);
   const OPENWEATHER_API_KEY = 'c006710ad501bdbe1d47d7d180d51f64';
 
-  // If not authenticated, render the password gate
+  // Conditional return must come AFTER all the hooks.
   if (!isAuthenticated) {
     return <PasswordGate onAuthenticated={() => setIsAuthenticated(true)} />;
   }
