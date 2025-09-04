@@ -1,11 +1,124 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getDatabase, ref, push, set, onValue } from 'firebase/database'; 
+import { getDatabase, ref, push, set, onValue } from 'firebase/database';
+
+// A custom modal component to replace alert and confirm.
+const CustomMessageModal = ({ message, onConfirm, onCancel }) => {
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full flex items-center justify-center z-50">
+      <div className="relative p-8 bg-white w-96 max-w-lg mx-auto rounded-xl shadow-lg transform transition-all sm:my-8 sm:align-middle sm:max-w-md">
+        <div className="text-center">
+          <h3 className="text-lg leading-6 font-bold text-gray-900 mb-2">Message</h3>
+          <p className="text-sm text-gray-500 mb-4">{message}</p>
+        </div>
+        <div className="flex justify-center gap-4 mt-4">
+          {onConfirm && (
+            <button
+              onClick={onConfirm}
+              className="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
+            >
+              Confirm
+            </button>
+          )}
+          {onCancel && (
+            <button
+              onClick={onCancel}
+              className="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:text-sm"
+            >
+              Cancel
+            </button>
+          )}
+          {!onConfirm && !onCancel && (
+            <button
+              onClick={onCancel} // Use cancel to close the success/fail message
+              className="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:text-sm"
+            >
+              OK
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 
+// Password Gate Component
+const PasswordGate = ({ onAuthenticated }) => {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [correctPassword, setCorrectPassword] = useState('');
 
-if (typeof L !== 'undefined') { 
+  // Fetch the password from the Vercel serverless function on component mount
+  useEffect(() => {
+    const fetchPassword = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch('/api/get-password');
+        const data = await response.json();
+        if (response.ok) {
+          setCorrectPassword(data.password);
+        } else {
+          setError(data.message || 'Failed to fetch password.');
+        }
+      } catch (err) {
+        setError('Network error: Could not connect to password service.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPassword();
+  }, []);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (loading) return;
+
+    if (password === correctPassword) {
+      onAuthenticated();
+    } else {
+      setError('Incorrect password. Please try again.');
+    }
+  };
+
+  return (
+    <div className="min-h-screen rally-bg font-inter flex items-center justify-center p-4">
+      <div className="bg-white p-8 sm:p-10 rounded-xl shadow-2xl w-full max-w-sm border border-blue-200 text-center">
+        <h1 className="text-3xl font-extrabold text-blue-800 mb-4">Access Denied</h1>
+        <p className="text-gray-700 mb-6">Please enter the password to proceed.</p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input
+            type="password"
+            className="shadow-sm appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-400"
+            placeholder="Enter Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={loading}
+          />
+          {loading ? (
+            <div className="flex items-center justify-center space-x-2">
+              <div className="w-4 h-4 rounded-full animate-pulse bg-blue-600"></div>
+              <div className="w-4 h-4 rounded-full animate-pulse bg-blue-600 delay-75"></div>
+              <div className="w-4 h-4 rounded-full animate-pulse bg-blue-600 delay-150"></div>
+            </div>
+          ) : (
+            <button
+              type="submit"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105"
+            >
+              Enter
+            </button>
+          )}
+          {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+        </form>
+      </div>
+    </div>
+  );
+};
+
+if (typeof L !== 'undefined') {
   delete L.Icon.Default.prototype._getIconUrl;
   L.Icon.Default.mergeOptions({
     iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
@@ -14,96 +127,77 @@ if (typeof L !== 'undefined') {
   });
 }
 
-
-
 const App = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [weatherData, setWeatherData] = useState(null);
   const [locationError, setLocationError] = useState('');
   const [loadingWeather, setLoadingWeather] = useState(true);
   const [userLatLon, setUserLatLon] = useState({ lat: 14.7921, lon: 120.8782 });
   const mapRef = useRef(null);
   const weatherLayerRef = useRef(null);
-  const floodMarkersRef = useRef([]); 
-  const [showGeolocationTip, setShowGeolocationTip] = useState(true); 
-
- 
-  const [db, setDb] = useState(null); 
+  const floodMarkersRef = useRef([]);
+  const [showGeolocationTip, setShowGeolocationTip] = useState(true);
+  const [db, setDb] = useState(null);
   const [auth, setAuth] = useState(null);
   const [userId, setUserId] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [floodReports, setFloodReports] = useState([]);
-
-  
   const mapSectionRef = useRef(null);
+  const OPENWEATHER_API_KEY = 'c006710ad501bdbe1d47d7d180d51f64';
 
-
-  
-  const OPENWEATHER_API_KEY = 'c006710ad501bdbe1d47d7d180d51f64'; 
-
-
+  // If not authenticated, render the password gate
+  if (!isAuthenticated) {
+    return <PasswordGate onAuthenticated={() => setIsAuthenticated(true)} />;
+  }
 
   // Firebase Initialization and Authentication
   useEffect(() => {
-    const initFirebase = async () => { // Made this an async function
+    const initFirebase = async () => {
       try {
-          // --- YOUR ACTUAL FIREBASE CONFIG ---
-          // This config includes databaseURL for Realtime Database
-          const firebaseConfig = {
-            apiKey: "AIzaSyDlT5sCVMBZSWqYTu9hhstp4Fr7N66SWss",
-            authDomain: "faceattendancerealtime-fbdf2.firebaseapp.com",
-            databaseURL: "https://faceattendancerealtime-fbdf2-default-rtdb.firebaseio.com", // Crucial for RTDB
-            projectId: "faceattendancerealtime-fbdf2",
-            storageBucket: "faceattendancerealtime-fbdf2.appspot.com",
-            messagingSenderId: "338410759674",
-            appId: "1:338410759674:web:c6820d269c0029128a3043",
-            measurementId: "G-NQDD7MCT09"
-          };
-          // For consistency, use projectId as the base for app-specific paths in RTDB
-          const effectiveAppId = firebaseConfig.projectId; 
-          // --- END FIREBASE CONFIG ---
-
-          const app = initializeApp(firebaseConfig);
-          const realtimeDb = getDatabase(app); // Get Realtime Database instance
-          const firebaseAuth = getAuth(app);
-
-          setDb(realtimeDb); // Set Realtime Database instance
-          setAuth(firebaseAuth);
-
-          // Ensure authentication completes before setting isAuthReady
-          try {
-            // Check if there's an existing user or sign in anonymously
-            if (!firebaseAuth.currentUser) {
-                await signInAnonymously(firebaseAuth);
-            }
-          } catch (error) {
-            console.error("Firebase anonymous authentication error:", error);
-            setLocationError("Failed to sign in anonymously. Community features may not work.");
+        const firebaseConfig = {
+          apiKey: "AIzaSyDlT5sCVMBZSWqYTu9hhstp4Fr7N66SWss",
+          authDomain: "faceattendancerealtime-fbdf2.firebaseapp.com",
+          databaseURL: "https://faceattendancerealtime-fbdf2-default-rtdb.firebaseio.com",
+          projectId: "faceattendancerealtime-fbdf2",
+          storageBucket: "faceattendancerealtime-fbdf2.appspot.com",
+          messagingSenderId: "338410759674",
+          appId: "1:338410759674:web:c6820d269c0029128a3043",
+          measurementId: "G-NQDD7MCT09"
+        };
+        const effectiveAppId = firebaseConfig.projectId;
+        const app = initializeApp(firebaseConfig);
+        const realtimeDb = getDatabase(app);
+        const firebaseAuth = getAuth(app);
+        setDb(realtimeDb);
+        setAuth(firebaseAuth);
+        try {
+          if (!firebaseAuth.currentUser) {
+            await signInAnonymously(firebaseAuth);
           }
-
-          // Set up auth state listener
-          const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
-            if (user) {
-              setUserId(user.uid);
-              setIsAuthReady(true);
-              console.log("Firebase User ID:", user.uid);
-            } else {
-              setUserId(null);
-              setIsAuthReady(true); // Still ready, even if not authenticated
-              console.log("No Firebase user is signed in.");
-            }
-          });
-
-          return () => unsubscribe(); // Cleanup auth listener
+        } catch (error) {
+          console.error("Firebase anonymous authentication error:", error);
+          setLocationError("Failed to sign in anonymously. Community features may not work.");
+        }
+        const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+          if (user) {
+            setUserId(user.uid);
+            setIsAuthReady(true);
+            console.log("Firebase User ID:", user.uid);
+          } else {
+            setUserId(null);
+            setIsAuthReady(true);
+            console.log("No Firebase user is signed in.");
+          }
+        });
+        return () => unsubscribe();
       } catch (error) {
-          console.error("Error initializing Firebase:", error);
-          setLocationError("Failed to initialize Firebase services. Community features may not work.");
+        console.error("Error initializing Firebase:", error);
+        setLocationError("Failed to initialize Firebase services. Community features may not work.");
       }
     };
+    initFirebase();
+  }, []);
 
-    initFirebase(); // Call the async function
-  }, []); // Run once on component mount for Firebase setup
-
-  // Effect to get user's geolocation and fetch weather
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -111,24 +205,23 @@ const App = () => {
           const { latitude, longitude } = position.coords;
           setUserLatLon({ lat: latitude, lon: longitude });
           fetchWeather(latitude, longitude);
-          setShowGeolocationTip(false); // Hide tip if geolocation is successful
+          setShowGeolocationTip(false);
         },
         (error) => {
           console.error("Geolocation error:", error);
           setLocationError('Unable to retrieve your location. Displaying weather for Bulacan. Please ensure location permissions are granted in your browser settings.');
-          fetchWeather(userLatLon.lat, userLatLon.lon); // Fetch for default Manila
-          setShowGeolocationTip(true); // Show tip if geolocation fails
+          fetchWeather(userLatLon.lat, userLatLon.lon);
+          setShowGeolocationTip(true);
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } else {
       setLocationError('Geolocation is not supported by your browser. Displaying weather for Manila.');
-      fetchWeather(userLatLon.lat, userLatLon.lon); // Fetch for default Manila
-      setShowGeolocationTip(true); // Show tip if geolocation is not supported
+      fetchWeather(userLatLon.lat, userLatLon.lon);
+      setShowGeolocationTip(true);
     }
-  }, []); // Run once on component mount
+  }, []);
 
-  // Function to fetch weather data
   const fetchWeather = async (lat, lon) => {
     setLoadingWeather(true);
     if (OPENWEATHER_API_KEY === 'YOUR_OPENWEATHERMAP_API_KEY' || !OPENWEATHER_API_KEY) {
@@ -141,7 +234,6 @@ const App = () => {
         `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${OPENWEATHER_API_KEY}&units=metric`
       );
       if (!response.ok) {
-        // More specific error message for 401 Unauthorized
         if (response.status === 401) {
           throw new Error(`Unauthorized: Please check your OpenWeatherMap API key. It might be incorrect or not activated yet.`);
         }
@@ -157,62 +249,48 @@ const App = () => {
     }
   };
 
-  // Effect to initialize and update the map and add flood markers
   useEffect(() => {
-    // Ensure Leaflet (L) is loaded before trying to use it
     if (typeof L === 'undefined') {
       console.warn("Leaflet (L) is not loaded. Please ensure you have added the Leaflet CDN script to your index.html.");
       return;
     }
-
     if (!mapRef.current) {
-      // Initialize map only once
-      const map = L.map('map').setView([userLatLon.lat, userLatLon.lon], 7); // Centered on user/Manila, zoom level 7
-
+      const map = L.map('map').setView([userLatLon.lat, userLatLon.lon], 7);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       }).addTo(map);
-
-      // Add OpenWeatherMap precipitation layer
       if (OPENWEATHER_API_KEY !== 'YOUR_OPENWEATHERMAP_API_KEY' && OPENWEATHER_API_KEY) {
         const precipitationLayer = L.tileLayer(
           `https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${OPENWEATHER_API_KEY}`,
           {
             attribution: 'Weather data &copy; <a href="https://openweathermap.org">OpenWeatherMap</a>',
-            opacity: 0.6 // Make it semi-transparent
+            opacity: 0.6
           }
         ).addTo(map);
         weatherLayerRef.current = precipitationLayer;
       } else {
         console.warn("OpenWeatherMap API key not set for map layers.");
       }
-
       mapRef.current = map;
     } else {
-      // If map exists, just update its view to the user's location
       mapRef.current.setView([userLatLon.lat, userLatLon.lon], mapRef.current.getZoom());
     }
-
-    // Add flood reports to the map
     if (mapRef.current && floodReports.length > 0) {
-      // Clear existing flood markers
       floodMarkersRef.current.forEach(marker => {
         if (mapRef.current.hasLayer(marker)) {
           mapRef.current.removeLayer(marker);
         }
       });
-      floodMarkersRef.current = []; // Reset the array
-
+      floodMarkersRef.current = [];
       floodReports.forEach(report => {
         const markerColor = getFloodLevelColor(report.floodLevel);
         const customIcon = L.divIcon({
           className: 'custom-div-icon',
           html: `<div style="background-color: ${markerColor}; width: 30px; height: 30px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`,
           iconSize: [30, 30],
-          iconAnchor: [15, 30], // Anchor at the bottom center
-          popupAnchor: [0, -20] // Adjust popup position
+          iconAnchor: [15, 30],
+          popupAnchor: [0, -20]
         });
-
         const marker = L.marker([report.latitude, report.longitude], { icon: customIcon }).addTo(mapRef.current);
         const timestamp = new Date(report.timestamp).toLocaleString();
         marker.bindPopup(`
@@ -221,88 +299,66 @@ const App = () => {
             <p><strong>Level:</strong> ${report.floodLevel}</p>
             <p><strong>Details:</strong> ${report.message || 'No additional details.'}</p>
             <p><strong>Reported:</strong> ${timestamp}</p>
-           
           </div>
         `);
-        floodMarkersRef.current.push(marker); // Add to ref for later clearing
+        floodMarkersRef.current.push(marker);
       });
     }
+  }, [userLatLon, OPENWEATHER_API_KEY, floodReports]);
 
-  }, [userLatLon, OPENWEATHER_API_KEY, floodReports]); // Re-run if userLatLon, API key, or floodReports change
-
-  // Function to get color based on flood level
   const getFloodLevelColor = (level) => {
     switch (level) {
-      case 'All Good!': return '#4CAF50'; // Green
-      case 'Minor Injury': return '#8BC34A'; // Light Green
-      case 'Medical Assistance': return '#FFEB3B'; // Yellow
-      case 'Urgent Care Needed': return '#FFC107'; // Amber
-      case 'Emergency Situation': return '#F44336'; // Red
-      default: return '#9E9E9E'; // Grey
+      case 'All Good!': return '#4CAF50';
+      case 'Minor Injury': return '#8BC34A';
+      case 'Medical Assistance': return '#FFEB3B';
+      case 'Urgent Care Needed': return '#FFC107';
+      case 'Emergency Situation': return '#F44336';
+      default: return '#9E9E9E';
     }
   };
 
-  // Effect to fetch flood reports from Realtime Database
   useEffect(() => {
     if (db && isAuthReady) {
-      const effectiveAppId = "faceattendancerealtime-fbdf2"; // Use your projectId for the path
-      // Change path to listen for current status of each user
+      const effectiveAppId = "faceattendancerealtime-fbdf2";
       const floodReportsRef = ref(db, `artifacts/${effectiveAppId}/public/data/currentFloodStatusByUsers`);
       console.log("Fetching flood reports from RTDB path:", `artifacts/${effectiveAppId}/public/data/currentFloodStatusByUsers`);
-
-      // Use onValue to listen for data changes
       const unsubscribe = onValue(floodReportsRef, (snapshot) => {
         const data = snapshot.val();
         const reports = [];
         if (data) {
-          // Realtime Database returns an object of objects, convert to array
-          // Each key is now a userId
           for (let userIdKey in data) {
             reports.push({
-              id: userIdKey, // The userId is now the ID
-              userId: userIdKey, // Store userId explicitly if needed in the object
+              id: userIdKey,
+              userId: userIdKey,
               ...data[userIdKey],
-              // Ensure timestamp is a number for sorting
               timestamp: data[userIdKey].timestamp || Date.now()
             });
           }
         }
-        // Sort reports by timestamp, newest first
         reports.sort((a, b) => b.timestamp - a.timestamp);
         setFloodReports(reports);
       }, (error) => {
         console.error("Error fetching flood reports from Realtime Database:", error);
         setLocationError("Failed to load community flood reports. Check your Realtime Database security rules.");
       });
-
-      return () => unsubscribe(); // Cleanup listener
+      return () => unsubscribe();
     }
-  }, [db, isAuthReady]); // Re-run when db or auth state changes
+  }, [db, isAuthReady]);
 
-
-  // Function to handle viewing a specific report on the map
   const handleViewOnMap = (lat, lon, message) => {
     if (mapRef.current) {
-      mapRef.current.setView([lat, lon], 14); // Zoom to a closer level, e.g., 14
-
-      // Auto-scroll to the map section
+      mapRef.current.setView([lat, lon], 14);
       if (mapSectionRef.current) {
         mapSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
-
-      // Find the corresponding marker and open its popup
       const targetMarker = floodMarkersRef.current.find(marker => {
         const markerLatLon = marker.getLatLng();
-        // Use a small tolerance for float comparison
         const tolerance = 0.000001;
         return Math.abs(markerLatLon.lat - lat) < tolerance && Math.abs(markerLatLon.lng - lon) < tolerance;
       });
-
       if (targetMarker) {
         targetMarker.openPopup();
       } else {
-        // Fallback: If for some reason the marker isn't found in floodMarkersRef,
-        // create a temporary one and open its popup.
         const tempMarker = L.marker([lat, lon]).addTo(mapRef.current);
         tempMarker.bindPopup(`
           <div class="font-inter text-gray-800">
@@ -310,7 +366,6 @@ const App = () => {
             <p><strong>Details:</strong> ${message || 'No additional details.'}</p>
           </div>
         `).openPopup();
-        // Optionally, remove this temporary marker after a short delay
         setTimeout(() => {
           if (mapRef.current.hasLayer(tempMarker)) {
             mapRef.current.removeLayer(tempMarker);
@@ -320,44 +375,41 @@ const App = () => {
     }
   };
 
-
   return (
-  <div className="min-h-screen rally-bg font-inter text-gray-800 p-4 sm:p-6 md:p-8 flex flex-col items-center">
-    <style>
-      {`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-        .rally-bg {
-          background-image: url('/images/image.jpg');
-          background-size: cover;
-          background-position: center;
-          background-repeat: no-repeat;
-          background-attachment: fixed;
-        }
-        #map {
-          height: 400px;
-          width: 100%;
-          border-radius: 12px;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-          margin-top: 24px;
-          margin-bottom: 24px;
-        }
-        .leaflet-control-attribution {
-          background: rgba(255, 255, 255, 0.7) !important;
-          padding: 4px 8px !important;
-          border-radius: 6px !important;
-        }
-        /* Custom marker icon styling */
-        .custom-div-icon {
-          background-color: transparent;
-          border: none;
-        }
-      `}
-      {/* Leaflet CSS loaded via CDN */}
-      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
-        xintegrity="sha512-xod8SWTA+7f4xYJzQy9t+7x/W5f/fD/e/S6f/g/X8h/p/0/z/f/y/E/g/F/G/H/I/J/K/L/M/N/O/P/Q/R/S/T/U/V/W/X/Y/Z/a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p/q/r/s/t/u/v/w/x/y/z/0/1/2/3/4/5/6/7/8/9/+/="
-        crossOrigin="" />
-    </style>
+    <div className="min-h-screen rally-bg font-inter text-gray-800 p-4 sm:p-6 md:p-8 flex flex-col items-center">
+      <style>
+        {`
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+          body { font-family: 'Inter', sans-serif; }
+          .rally-bg {
+            background-image: url('/images/image.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+          }
+          #map {
+            height: 400px;
+            width: 100%;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            margin-top: 24px;
+            margin-bottom: 24px;
+          }
+          .leaflet-control-attribution {
+            background: rgba(255, 255, 255, 0.7) !important;
+            padding: 4px 8px !important;
+            border-radius: 6px !important;
+          }
+          .custom-div-icon {
+            background-color: transparent;
+            border: none;
+          }
+        `}
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+          xintegrity="sha512-xod8SWTA+7f4xYJzQy9t+7x/W5f/fD/e/S6f/g/X8h/p/0/z/f/y/E/g/F/G/H/I/J/K/L/M/N/O/P/Q/R/S/T/U/V/W/X/Y/Z/a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p/q/r/s/t/u/v/w/x/y/z/0/1/2/3/4/5/6/7/8/9/+/="
+          crossOrigin="" />
+      </style>
 
       <h1 className="text-4xl sm:text-5xl font-extrabold text-yellow-100 mb-6 text-center drop-shadow-lg">
         ONE PEACE!
@@ -365,7 +417,6 @@ const App = () => {
       <p className="text-lg text-gray-200 mb-8 text-center max-w-2xl">
       </p>
 
-      {/* Geolocation Tip */}
       {showGeolocationTip && (
         <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded-lg relative w-full max-w-3xl mb-6 shadow-md" role="alert">
           <strong className="font-bold">Location Access Needed:</strong>
@@ -380,8 +431,6 @@ const App = () => {
           </span>
         </div>
       )}
-
-      {/* Weather Section */}
       <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-3xl mb-8 border border-blue-200">
         <h2 className="text-3xl font-bold text-blue-700 mb-4 flex items-center">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mr-3 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
@@ -431,36 +480,33 @@ const App = () => {
           <p className="text-center text-gray-600">No weather data available.</p>
         )}
       </div>
-{/* Map Section */}
- <div ref={mapSectionRef} className="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-3xl mb-8 border border-blue-200">
-   <h2 className="text-3xl font-bold text-blue-700 mb-4 flex items-center">
-     <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mr-3 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
-       <path d="M12 2A10 10 0 1 0 22 12A10 10 0 0 0 12 2ZM12 20A8 8 0 1 1 20 12A8 8 0 0 1 12 20ZM12 4a8 8 0 0 0-7.07 12.07l.71-.71A7 7 0
-         0 1 12 5a7 7 0 0 1 7 7a7 7 0 0 1-7 7a7 7 0 0 1-7-7a1 1 0 0 0-2 0a9 9 0 0 0 9 9a9 9 0 0 0 9-9A9 9 0 0 0 12 4Z"/>
-       <path d="M12 12.75a.75.75 0 0 1-.75-.75V6a.75.75 0 0 1 1.5 0v6a.75.75 0 0 1-.75.75Z"/>
-       <path d="M12 17.5a.75.75 0
-         0 1-.75-.75V15a.75.75 0 0 1 1.5 0v1.75a.75.75 0 0 1-.75.75Z"/>
-     </svg>
-    Nakama Status:
-   </h2>
-   <div id="map" className="h-96 w-full rounded-lg shadow-md"></div>
-   <p className="text-sm text-gray-600 mt-4">
-     Makikita din sa map na ’to ang current na lakas ng ulan.
-     Mas dark ang kulay = mas malakas ang buhos, possible na signal ng masamang panahon o posibleng pagbaha.
-   </p>
-   <div className="mt-4 text-sm text-gray-700">
-     <h4 className="font-semibold mb-2">Legend:</h4>
-     <ul className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-       <li><span className="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: '#4CAF50' }}></span>No Help Needed</li>
-       <li><span className="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: '#8BC34A' }}></span>Minor Injury</li>
-       <li><span className="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: '#FFEB3B' }}></span>Medical Assistance</li>
-       <li><span className="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: '#FFC107' }}></span>Need Backup</li>
-       <li><span className="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: '#F44336' }}></span>Urgent Care Needed</li>
-     </ul>
-   </div>
- </div>
-
-      {/* Community Flood Watch - New Feature */}
+      <div ref={mapSectionRef} className="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-3xl mb-8 border border-blue-200">
+        <h2 className="text-3xl font-bold text-blue-700 mb-4 flex items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mr-3 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2A10 10 0 1 0 22 12A10 10 0 0 0 12 2ZM12 20A8 8 0 1 1 20 12A8 8 0 0 1 12 20ZM12 4a8 8 0 0 0-7.07 12.07l.71-.71A7 7 0
+              0 1 12 5a7 7 0 0 1 7 7a7 7 0 0 1-7 7a7 7 0 0 1-7-7a1 1 0 0 0-2 0a9 9 0 0 0 9 9a9 9 0 0 0 9-9A9 9 0 0 0 12 4Z"/>
+            <path d="M12 12.75a.75.75 0 0 1-.75-.75V6a.75.75 0 0 1 1.5 0v6a.75.75 0 0 1-.75.75Z"/>
+            <path d="M12 17.5a.75.75 0
+              0 1-.75-.75V15a.75.75 0 0 1 1.5 0v1.75a.75.75 0 0 1-.75.75Z"/>
+          </svg>
+          Nakama Status:
+        </h2>
+        <div id="map" className="h-96 w-full rounded-lg shadow-md"></div>
+        <p className="text-sm text-gray-600 mt-4">
+          Makikita din sa map na ’to ang current na lakas ng ulan.
+          Mas dark ang kulay = mas malakas ang buhos, possible na signal ng masamang panahon o posibleng pagbaha.
+        </p>
+        <div className="mt-4 text-sm text-gray-700">
+          <h4 className="font-semibold mb-2">Legend:</h4>
+          <ul className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <li><span className="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: '#4CAF50' }}></span>No Help Needed</li>
+            <li><span className="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: '#8BC34A' }}></span>Minor Injury</li>
+            <li><span className="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: '#FFEB3B' }}></span>Medical Assistance</li>
+            <li><span className="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: '#FFC107' }}></span>Need Backup</li>
+            <li><span className="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: '#F44336' }}></span>Urgent Care Needed</li>
+          </ul>
+        </div>
+      </div>
       <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-3xl mb-8 border border-blue-200">
         <h2 className="text-3xl font-bold text-blue-700 mb-4 flex items-center">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mr-3 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
@@ -472,7 +518,7 @@ const App = () => {
           )}
         </h2>
         <p className="text-gray-700 mb-4">
-        Tulong-tulong tayo. I-update kung kung ano ganap sa lugar mo para aware din ’yung iba. Check real-time reports sa map sa taas.
+          Tulong-tulong tayo. I-update kung kung ano ganap sa lugar mo para aware din ’yung iba. Check real-time reports sa map sa taas.
         </p>
         <FloodReporter userLat={userLatLon.lat} userLon={userLatLon.lon} db={db} userId={userId} isAuthReady={isAuthReady} />
         <div className="mt-6">
@@ -484,7 +530,7 @@ const App = () => {
           </h3>
           {floodReports.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {floodReports.slice(0, 6).map((report) => ( 
+              {floodReports.slice(0, 6).map((report) => (
                 <div key={report.id} className="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200">
                   <p className="font-semibold text-blue-800">{report.floodLevel}</p>
                   <p className="text-gray-700 text-sm">{report.message || 'No additional details.'}</p>
@@ -505,10 +551,6 @@ const App = () => {
           )}
         </div>
       </div>
-
-
-     
-      {/* Safety Beacon - Unique Feature */}
       <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-3xl border border-blue-200">
         <h2 className="text-3xl font-bold text-blue-700 mb-4 flex items-center">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mr-3 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
@@ -519,12 +561,10 @@ const App = () => {
           Safety Beacon
         </h2>
         <p className="text-gray-700 mb-4">
-        Send a quick status update with your location para alam ng fam, friends kung nasaan ka at anong need mo.
+          Send a quick status update with your location para alam ng fam, friends kung nasaan ka at anong need mo.
         </p>
         <SafetyBeacon userLat={userLatLon.lat} userLon={userLatLon.lon} />
       </div>
-    
-      {/* --- Developer Information --- */}
       <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-3xl mt-8 border border-blue-200 text-center">
         <h2 className="text-2xl font-bold text-blue-700 mb-3">
           Developer Information
@@ -536,16 +576,10 @@ const App = () => {
           TikTok: @first.sorata480
         </p>
       </div>
-      {/* --- End Developer Information --- */}
-
-
-     
-
     </div>
   );
 };
 
-// Safety Beacon Component (remains unchanged from your provided code)
 const SafetyBeacon = ({ userLat, userLon }) => {
   const [location, setLocation] = useState('');
   const [status, setStatus] = useState('Safe and sound');
@@ -572,7 +606,6 @@ const SafetyBeacon = ({ userLat, userLon }) => {
         setLocation(`Lat: ${userLat.toFixed(4)}, Lon: ${userLon.toFixed(4)}`);
       }
     };
-
     if (userLat && userLon) {
       fetchLocationName();
     }
@@ -635,7 +668,6 @@ const SafetyBeacon = ({ userLat, userLon }) => {
           placeholder="e.g., My home in Quezon City"
         />
       </div>
-
       <div>
         <label htmlFor="status" className="block text-gray-700 text-sm font-bold mb-2">
           Your Status:
@@ -653,7 +685,6 @@ const SafetyBeacon = ({ userLat, userLon }) => {
           <option value="Moved to a safe zone">Moved to a safe zone</option>
         </select>
       </div>
-
       <div>
         <label htmlFor="customMessage" className="block text-gray-700 text-sm font-bold mb-2">
           Additional Message (optional):
@@ -667,7 +698,6 @@ const SafetyBeacon = ({ userLat, userLon }) => {
           placeholder="ex: Sugatan ako, need ng rescue!"
         ></textarea>
       </div>
-
       <div>
         <label htmlFor="contactNumber" className="block text-gray-700 text-sm font-bold mb-2">
           Contact Number (optional):
@@ -681,14 +711,12 @@ const SafetyBeacon = ({ userLat, userLon }) => {
           placeholder="e.g., +639171234567"
         />
       </div>
-
       <button
         onClick={generateMessage}
         className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
       >
         Generate Safety Message
       </button>
-
       {generatedMessage && (
         <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg shadow-inner">
           <p className="font-semibold text-blue-800 mb-2">Your Generated Message:</p>
@@ -716,27 +744,24 @@ const SafetyBeacon = ({ userLat, userLon }) => {
   );
 };
 
-// Flood Reporter Component
-// FloodReporter Component
 const FloodReporter = ({ userLat, userLon, db, userId, isAuthReady }) => {
   const [floodLevel, setFloodLevel] = useState('All Good!');
   const [message, setMessage] = useState('');
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showResultModal, setShowResultModal] = useState(false);
+  const [resultMessage, setResultMessage] = useState('');
 
   const handleReport = async () => {
     if (!db || !isAuthReady || !userId) {
-      alert("Please wait for authentication and database to initialize.");
+      setResultMessage("Please wait for authentication and database to initialize.");
+      setShowResultModal(true);
       return;
     }
+    setShowConfirmModal(true);
+  };
 
-    // ✅ Confirmation dialog before sending
-    const confirmSend = window.confirm(
-      "Confirm your location?\n\nTo protect your privacy, make sure you’re not at home.\n\nPara sa iyong privacy, siguraduhin na hindi ka nasa bahay."
-    );
-
-    if (!confirmSend) {
-      return; // ❌ Cancelled
-    }
-
+  const confirmReport = async () => {
+    setShowConfirmModal(false);
     try {
       const reportRef = ref(db, `artifacts/faceattendancerealtime-fbdf2/public/data/currentFloodStatusByUsers/${userId}`);
       await set(reportRef, {
@@ -746,16 +771,31 @@ const FloodReporter = ({ userLat, userLon, db, userId, isAuthReady }) => {
         message,
         timestamp: Date.now(),
       });
-      alert("✅ Report successfully sent!");
+      setResultMessage("✅ Report successfully sent!");
+      setShowResultModal(true);
       setMessage(""); // Clear input
     } catch (error) {
       console.error("Error sending report:", error);
-      alert("❌ Failed to send report. Please try again.");
+      setResultMessage("❌ Failed to send report. Please try again.");
+      setShowResultModal(true);
     }
   };
 
- return (
+  return (
     <div className="space-y-4">
+      {showConfirmModal && (
+        <CustomMessageModal
+          message="Confirm your location? To protect your privacy, make sure you’re not at home. Para sa iyong privacy, siguraduhin na hindi ka nasa bahay."
+          onConfirm={confirmReport}
+          onCancel={() => setShowConfirmModal(false)}
+        />
+      )}
+      {showResultModal && (
+        <CustomMessageModal
+          message={resultMessage}
+          onCancel={() => setShowResultModal(false)}
+        />
+      )}
       <div>
         <label htmlFor="floodLevel" className="block text-gray-700 text-sm font-bold mb-2">
           Current status at Your Location:
@@ -773,7 +813,6 @@ const FloodReporter = ({ userLat, userLon, db, userId, isAuthReady }) => {
           <option value="Emergency Situation"> Help Me - Grabe, nasa emergency situation ako.</option>
         </select>
       </div>
-
       <label className="block font-semibold text-gray-700 mb-2">Additional Details (optional):</label>
       <textarea
         value={message}
@@ -781,7 +820,6 @@ const FloodReporter = ({ userLat, userLon, db, userId, isAuthReady }) => {
         className="w-full border border-gray-300 rounded-lg p-2 mb-4"
         placeholder="Type here..."
       />
-
       <button
         onClick={handleReport}
         className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition"
@@ -791,5 +829,4 @@ const FloodReporter = ({ userLat, userLon, db, userId, isAuthReady }) => {
     </div>
   );
 };
-
 export default App;
