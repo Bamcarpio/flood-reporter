@@ -165,9 +165,10 @@ const App = () => {
 
   // Effect to handle all app initialization logic once authenticated
   useEffect(() => {
+    // This effect runs only once when isAuthenticated becomes true, preventing the loop
     const initApp = async () => {
-      // Firebase Initialization and Authentication
       try {
+        // Firebase Initialization and Authentication
         const firebaseConfig = {
           apiKey: "AIzaSyDlT5sCVMBZSWqYTu9hhstp4Fr7N66SWss",
           authDomain: "faceattendancerealtime-fbdf2.firebaseapp.com",
@@ -226,7 +227,8 @@ const App = () => {
           setShowGeolocationTip(true);
         }
 
-        setAppInitialized(true); // App is now ready
+        // Only set this to true AFTER all the above async calls have initiated.
+        setAppInitialized(true); 
         return () => unsubscribeAuth();
       } catch (error) {
         console.error("Error initializing app:", error);
@@ -238,7 +240,7 @@ const App = () => {
     if (isAuthenticated && !appInitialized) {
       initApp();
     }
-  }, [isAuthenticated, appInitialized]);
+  }, [isAuthenticated]); // Only run this hook when isAuthenticated changes to true.
 
   // Effect to fetch weather data
   const fetchWeather = async (lat, lon) => {
@@ -520,7 +522,7 @@ const App = () => {
             <li><span className="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: '#4CAF50' }}></span>No Help Needed</li>
             <li><span className="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: '#8BC34A' }}></span>Minor Injury</li>
             <li><span className="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: '#FFEB3B' }}></span>Medical Assistance</li>
-            <li><span className="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: '#FFC107' }}></span>Need Backup</li>
+            <li><span className-="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: '#FFC107' }}></span>Need Backup</li>
             <li><span className="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: '#F44336' }}></span>Urgent Care Needed</li>
           </ul>
         </div>
@@ -700,7 +702,6 @@ const SafetyBeacon = ({ userLat, userLon }) => {
           <option value="Need assistance (food, water)">Need assistance (pagkain, tubig)</option>
           <option value="Stranded (cannot move)">Cannot move</option>
           <option value="Injured / Medical attention needed">Injured / Medical attention needed</option>
-          <option value="Moved to a safe zone">Moved to a safe zone</option>
         </select>
       </div>
       <div>
@@ -828,6 +829,7 @@ const FloodReporter = ({ userLat, userLon, db, userId, isAuthReady }) => {
           <option value="Minor Injury"> Minor Injury - May konting gasgas lang or sprain.</option>
           <option value="Medical Assistance">Medical Assistance - Need ng aid, like first aid or water.</option>
           <option value="Urgent Care Needed"> Urgent Care Needed - Masakit na, need a medic right away.</option>
+          <option value="Emergency Situation"> Help Me - Grabe, nasa emergency situation ako.</option>
         </select>
       </div>
       <label className="block font-semibold text-gray-700 mb-2">Additional Details (optional):</label>
