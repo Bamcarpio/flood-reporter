@@ -1,7 +1,108 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
+<<<<<<< HEAD
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getDatabase, ref, set, onValue } from 'firebase/database';
+=======
+import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getDatabase, ref, set, onValue } from 'firebase/database';
+
+// A custom modal component to replace alert and confirm
+const CustomMessageModal = ({ message, onConfirm, onCancel }) => {
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full flex items-center justify-center z-50">
+      <div className="relative p-8 bg-white w-96 max-w-lg mx-auto rounded-xl shadow-lg transform transition-all sm:my-8 sm:align-middle sm:max-w-md">
+        <div className="text-center">
+          <h3 className="text-lg leading-6 font-bold text-gray-900 mb-2">Message</h3>
+          <p className="text-sm text-gray-500 mb-4">{message}</p>
+        </div>
+        <div className="flex justify-center gap-4 mt-4">
+          {onConfirm && (
+            <button
+              onClick={onConfirm}
+              className="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
+            >
+              Confirm
+            </button>
+          )}
+          {onCancel && (
+            <button
+              onClick={onCancel}
+              className="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:text-sm"
+            >
+              Cancel
+            </button>
+          )}
+          {!onConfirm && !onCancel && (
+            <button
+              onClick={() => onCancel()}
+              className="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:text-sm"
+            >
+              OK
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Password Gate Component
+const PasswordGate = ({ onAuthenticated }) => {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  
+  // NOTE: In a real app, you would not hardcode this.
+  // We are hardcoding it here to enable testing.
+  const CORRECT_PASSWORD = 'password';
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (loading) return;
+
+    if (password === CORRECT_PASSWORD) {
+      onAuthenticated();
+    } else {
+      setError('Incorrect password. Please try again.');
+    }
+  };
+
+  return (
+    <div className="min-h-screen rally-bg font-inter flex items-center justify-center p-4">
+      <div className="bg-white p-8 sm:p-10 rounded-xl shadow-2xl w-full max-w-sm border border-blue-200 text-center">
+        <h1 className="text-3xl font-extrabold text-blue-800 mb-4">Access Denied</h1>
+        <p className="text-gray-700 mb-6">Please enter the password to proceed.</p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input
+            type="password"
+            className="shadow-sm appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-400"
+            placeholder="Enter Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={loading}
+          />
+          {loading ? (
+            <div className="flex items-center justify-center space-x-2">
+              <div className="w-4 h-4 rounded-full animate-pulse bg-blue-600"></div>
+              <div className="w-4 h-4 rounded-full animate-pulse bg-blue-600 delay-75"></div>
+              <div className="w-4 h-4 rounded-full animate-pulse bg-blue-600 delay-150"></div>
+            </div>
+          ) : (
+            <button
+              type="submit"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105"
+            >
+              Enter
+            </button>
+          )}
+          {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+        </form>
+      </div>
+    </div>
+  );
+};
+>>>>>>> d199eda5f946f35d56b646ec43f8e0175126d2cf
 
 // Note: This code assumes Leaflet is loaded via a CDN in your index.html
 // This check prevents an error if the script hasn't loaded yet.
@@ -14,7 +115,9 @@ if (typeof L !== 'undefined') {
   });
 }
 
+// Main App Component
 const App = () => {
+<<<<<<< HEAD
   // New state for password protection
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
@@ -29,6 +132,10 @@ const App = () => {
     onCancel: null,
   });
 
+=======
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [appInitialized, setAppInitialized] = useState(false);
+>>>>>>> d199eda5f946f35d56b646ec43f8e0175126d2cf
   const [weatherData, setWeatherData] = useState(null);
   const [locationError, setLocationError] = useState('');
   const [loadingWeather, setLoadingWeather] = useState(true);
@@ -43,8 +150,9 @@ const App = () => {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [floodReports, setFloodReports] = useState([]);
   const mapSectionRef = useRef(null);
-  const OPENWEATHER_API_KEY = 'c006710ad501bdbe1d47d7d180d51f64';
+  const OPENWEATHER_API_KEY = 'c006710ad501bdbe1d47d7d180d51f64'; // NOTE: This is your API key.
 
+<<<<<<< HEAD
   // Function to show the custom modal
   const showModal = (title, message, onConfirm = null, onCancel = null) => {
     setModal({ isOpen: true, title, message, onConfirm, onCancel });
@@ -107,14 +215,78 @@ const App = () => {
         setDb(realtimeDb);
         setAuth(firebaseAuth);
 
+=======
+  // Effect to handle all app initialization logic once authenticated
+  // This hook runs only once when isAuthenticated becomes true.
+  useEffect(() => {
+    if (isAuthenticated) {
+      const initApp = async () => {
+>>>>>>> d199eda5f946f35d56b646ec43f8e0175126d2cf
         try {
-          if (!firebaseAuth.currentUser) {
-            await signInAnonymously(firebaseAuth);
+          // --- Firebase Initialization and Authentication ---
+          const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+          const app = initializeApp(firebaseConfig);
+          const realtimeDb = getDatabase(app);
+          const firebaseAuth = getAuth(app);
+          setDb(realtimeDb);
+          setAuth(firebaseAuth);
+
+          try {
+            const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+            if (initialAuthToken) {
+              await signInWithCustomToken(firebaseAuth, initialAuthToken);
+            } else {
+              await signInAnonymously(firebaseAuth);
+            }
+          } catch (error) {
+            console.error("Firebase authentication error:", error);
+            setLocationError("Failed to sign in. Community features may not work.");
           }
+
+          const unsubscribeAuth = onAuthStateChanged(firebaseAuth, (user) => {
+            if (user) {
+              setUserId(user.uid);
+              setIsAuthReady(true);
+            } else {
+              setUserId(null);
+              setIsAuthReady(true);
+            }
+          });
+
+          // --- Geolocation and Weather Data ---
+          await new Promise((resolve) => {
+            if (navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition(
+                (position) => {
+                  const { latitude, longitude } = position.coords;
+                  setUserLatLon({ lat: latitude, lon: longitude });
+                  fetchWeather(latitude, longitude).finally(resolve);
+                  setShowGeolocationTip(false);
+                },
+                (error) => {
+                  console.error("Geolocation error:", error);
+                  setLocationError('Unable to retrieve your location. Displaying weather for Bulacan. Please ensure location permissions are granted in your browser settings.');
+                  fetchWeather(userLatLon.lat, userLatLon.lon).finally(resolve);
+                  setShowGeolocationTip(true);
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+              );
+            } else {
+              setLocationError('Geolocation is not supported by your browser. Displaying weather for Bulacan.');
+              fetchWeather(userLatLon.lat, userLatLon.lon).finally(resolve);
+              setShowGeolocationTip(true);
+            }
+          });
+
+          setAppInitialized(true);
+          return () => unsubscribeAuth();
+
         } catch (error) {
-          console.error("Firebase anonymous authentication error:", error);
-          setLocationError("Failed to sign in anonymously. Community features may not work.");
+          console.error("Error initializing app:", error);
+          setLocationError("Failed to initialize app services.");
+          setAppInitialized(true);
         }
+<<<<<<< HEAD
 
         const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
           if (user) {
@@ -165,6 +337,14 @@ const App = () => {
   }, [isAuthenticated]);
 
   // Function to fetch weather data
+=======
+      };
+      initApp();
+    }
+  }, [isAuthenticated]);
+
+  // Effect to fetch weather data
+>>>>>>> d199eda5f946f35d56b646ec43f8e0175126d2cf
   const fetchWeather = async (lat, lon) => {
     setLoadingWeather(true);
     if (OPENWEATHER_API_KEY === 'YOUR_OPENWEATHERMAP_API_KEY' || !OPENWEATHER_API_KEY) {
@@ -194,10 +374,32 @@ const App = () => {
 
   // Effect to initialize and update the map and add flood markers
   useEffect(() => {
+<<<<<<< HEAD
     if (isAuthenticated) {
       if (typeof L === 'undefined') {
         console.warn("Leaflet (L) is not loaded. Please ensure you have added the Leaflet CDN script to your index.html.");
         return;
+=======
+    if (typeof L === 'undefined' || !appInitialized) {
+      return;
+    }
+    if (!mapRef.current) {
+      const map = L.map('map').setView([userLatLon.lat, userLatLon.lon], 7);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(map);
+      if (OPENWEATHER_API_KEY !== 'YOUR_OPENWEATHERMAP_API_KEY' && OPENWEATHER_API_KEY) {
+        const precipitationLayer = L.tileLayer(
+          `https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${OPENWEATHER_API_KEY}`,
+          {
+            attribution: 'Weather data &copy; <a href="https://openweathermap.org">OpenWeatherMap</a>',
+            opacity: 0.6
+          }
+        ).addTo(map);
+        weatherLayerRef.current = precipitationLayer;
+      } else {
+        console.warn("OpenWeatherMap API key not set for map layers.");
+>>>>>>> d199eda5f946f35d56b646ec43f8e0175126d2cf
       }
       if (!mapRef.current) {
         const map = L.map('map').setView([userLatLon.lat, userLatLon.lon], 7);
@@ -250,7 +452,11 @@ const App = () => {
         });
       }
     }
+<<<<<<< HEAD
   }, [userLatLon, OPENWEATHER_API_KEY, floodReports, isAuthenticated]);
+=======
+  }, [userLatLon, OPENWEATHER_API_KEY, floodReports, appInitialized]);
+>>>>>>> d199eda5f946f35d56b646ec43f8e0175126d2cf
 
   const getFloodLevelColor = (level) => {
     switch (level) {
@@ -267,8 +473,11 @@ const App = () => {
     if (db && isAuthReady && isAuthenticated) {
       const effectiveAppId = "faceattendancerealtime-fbdf2";
       const floodReportsRef = ref(db, `artifacts/${effectiveAppId}/public/data/currentFloodStatusByUsers`);
+<<<<<<< HEAD
       console.log("Fetching flood reports from RTDB path:", `artifacts/${effectiveAppId}/public/data/currentFloodStatusByUsers`);
 
+=======
+>>>>>>> d199eda5f946f35d56b646ec43f8e0175126d2cf
       const unsubscribe = onValue(floodReportsRef, (snapshot) => {
         const data = snapshot.val();
         const reports = [];
@@ -326,6 +535,7 @@ const App = () => {
     }
   };
 
+<<<<<<< HEAD
   const SafetyBeacon = ({ userLat, userLon }) => {
     const [location, setLocation] = useState('');
     const [status, setStatus] = useState('Safe and sound');
@@ -565,12 +775,37 @@ const App = () => {
 
   return (
     <div className="min-h-screen rally-bg font-inter text-gray-800 flex flex-col items-center justify-center relative">
+=======
+  // Conditional rendering based on states
+  if (!isAuthenticated) {
+    return <PasswordGate onAuthenticated={() => setIsAuthenticated(true)} />;
+  }
+
+  if (!appInitialized) {
+    return (
+      <div className="min-h-screen rally-bg font-inter flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-white text-lg">Loading App...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen rally-bg font-inter text-gray-800 p-4 sm:p-6 md:p-8 flex flex-col items-center">
+      <script src="https://cdn.tailwindcss.com"></script>
+>>>>>>> d199eda5f946f35d56b646ec43f8e0175126d2cf
       <style>
         {`
           @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
           body { font-family: 'Inter', sans-serif; }
           .rally-bg {
+<<<<<<< HEAD
             background-image: url('images/image.jpg');
+=======
+            background-image: url('https://placehold.co/1920x1080/4F46E5/FFFFFF?text=PLACEHOLDER+IMAGE');
+>>>>>>> d199eda5f946f35d56b646ec43f8e0175126d2cf
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
@@ -594,9 +829,13 @@ const App = () => {
             border: none;
           }
         `}
+<<<<<<< HEAD
         {/* Leaflet CSS loaded via CDN */}
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" crossOrigin="" />
+=======
+>>>>>>> d199eda5f946f35d56b646ec43f8e0175126d2cf
       </style>
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
 
       {/* The custom modal UI */}
       {modal.isOpen && (
@@ -661,6 +900,7 @@ const App = () => {
             </form>
           </div>
         </div>
+<<<<<<< HEAD
       ) : (
         // Original app content
         <div className="min-h-screen rally-bg font-inter text-gray-800 p-4 sm:p-6 md:p-8 flex flex-col items-center">
@@ -676,6 +916,223 @@ const App = () => {
             ONE PEACE!
           </h1>
           <p className="text-lg text-gray-200 mb-8 text-center max-w-2xl">
+=======
+      </div>
+      <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-3xl mb-8 border border-blue-200">
+        <h2 className="text-3xl font-bold text-blue-700 mb-4 flex items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mr-3 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v2h3l2.84 2.84c-.65.35-1.37.59-2.14.73zm7.45-2.73L15 14h-3V9l-5.16-5.16C7.38 3.23 8.66 3 10 3c3.87 0 7 3.13 7 7 0 1.34-.38 2.62-1.05 3.72z"/>
+          </svg>
+          Community Watch
+          {userId && (
+            <span className="ml-auto text-sm text-gray-500"></span>
+          )}
+        </h2>
+        <p className="text-gray-700 mb-4">
+          Tulong-tulong tayo. I-update kung kung ano ganap sa lugar mo para aware din ’yung iba. Check real-time reports sa map sa taas.
+        </p>
+        <FloodReporter userLat={userLatLon.lat} userLon={userLatLon.lon} db={db} userId={userId} isAuthReady={isAuthReady} />
+        <div className="mt-6">
+          <h3 className="text-2xl font-bold text-blue-700 mb-3 flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 mr-2 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v2h3l2.84 2.84c-.65.35-1.37.59-2.14.73zm7.45-2.73L15 14h-3V9l-5.16-5.16C7.38 3.23 8.66 3 10 3c3.87 0 7 3.13 7 7 0 1.34-.38 2.62-1.05 3.72z"/>
+            </svg>
+            Latest Reports
+          </h3>
+          {floodReports.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {floodReports.slice(0, 6).map((report) => (
+                <div key={report.id} className="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200">
+                  <p className="font-semibold text-blue-800">{report.floodLevel}</p>
+                  <p className="text-gray-700 text-sm">{report.message || 'No additional details.'}</p>
+                  <p className="text-gray-500 text-xs mt-1">
+                    {new Date(report.timestamp).toLocaleString()}
+                  </p>
+                  <button
+                    onClick={() => handleViewOnMap(report.latitude, report.longitude, report.message)}
+                    className="mt-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold py-1 px-3 rounded-full transition duration-200 ease-in-out"
+                  >
+                    View on Map
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-600">No reports yet. Be the first to report!</p>
+          )}
+        </div>
+      </div>
+      <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-3xl border border-blue-200">
+        <h2 className="text-3xl font-bold text-blue-700 mb-4 flex items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mr-3 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2A10 10 0 1 0 22 12A10 10 0 0 0 12 2ZM12 20A8 8 0 1 1 20 12A8 8 0 0 1 12 20ZM12 4a8 8 0 0 0-7.07 12.07l.71-.71A7 7 0 0 1 12 5a7 7 0 0 1 7 7a7 7 0 0 1-7 7a7 7 0 0 1-7-7a1 1 0 0 0-2 0a9 9 0 0 0 9 9a9 9 0 0 0 9-9A9 9 0 0 0 12 4Z"/>
+            <path d="M12 17.5a.75.75 0 0 1-.75-.75V15a.75.75 0 0 1 1.5 0v1.75a.75.75 0 0 1-.75.75Z"/>
+            <path d="M12 12.75a.75.75 0 0 1-.75-.75V6a.75.75 0 0 1 1.5 0v6a.75.75 0 0 1-.75.75Z"/>
+          </svg>
+          Safety Beacon
+        </h2>
+        <p className="text-gray-700 mb-4">
+          Send a quick status update with your location para alam ng fam, friends kung nasaan ka at anong need mo.
+        </p>
+        <SafetyBeacon userLat={userLatLon.lat} userLon={userLatLon.lon} />
+      </div>
+      <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-3xl mt-8 border border-blue-200 text-center">
+        <h2 className="text-2xl font-bold text-blue-700 mb-3">
+          Developer Information
+        </h2>
+        <p className="text-gray-700 text-lg">
+          Developed by First Name SORATA
+        </p>
+        <p className="text-gray-700 text-md mt-2">
+          TikTok: @first.sorata480
+        </p>
+      </div>
+    </div>
+  );
+};
+
+const SafetyBeacon = ({ userLat, userLon }) => {
+  const [location, setLocation] = useState('');
+  const [status, setStatus] = useState('Safe and sound');
+  const [customMessage, setCustomMessage] = useState('');
+  const [contactNumber, setContactNumber] = useState('');
+  const [generatedMessage, setGeneratedMessage] = useState('');
+  const [copySuccess, setCopySuccess] = useState('');
+
+  useEffect(() => {
+    const fetchLocationName = async () => {
+      const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${userLat}&lon=${userLon}`;
+      try {
+        const response = await fetch(nominatimUrl, {
+          headers: { 'User-Agent': 'PhilippinesCrisisApp/1.0 (your-email@example.com)' }
+        });
+        const data = await response.json();
+        if (data && data.display_name) {
+          setLocation(data.display_name);
+        } else {
+          setLocation(`Lat: ${userLat.toFixed(4)}, Lon: ${userLon.toFixed(4)}`);
+        }
+      } catch (error) {
+        console.error("Error fetching location name:", error);
+        setLocation(`Lat: ${userLat.toFixed(4)}, Lon: ${userLon.toFixed(4)}`);
+      }
+    };
+    if (userLat && userLon) {
+      fetchLocationName();
+    }
+  }, [userLat, userLon]);
+
+  const generateMessage = () => {
+    let message = `Crisis Update: I am ${status}.`;
+    if (location) {
+      message += ` My approximate location is: ${location}.`;
+    } else {
+      message += ` My approximate coordinates are Lat: ${userLat.toFixed(4)}, Lon: ${userLon.toFixed(4)}.`;
+    }
+    if (customMessage) {
+      message += ` Additional info: ${customMessage}.`;
+    }
+    if (contactNumber) {
+      message += ` Please contact me at: ${contactNumber}.`;
+    }
+    message += ``;
+    setGeneratedMessage(message);
+    setCopySuccess('');
+  };
+
+  const copyToClipboard = () => {
+    if (generatedMessage) {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = generatedMessage;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        setCopySuccess('Message copied to clipboard!');
+      } catch (err) {
+        console.error('Failed to copy text: ', err);
+        setCopySuccess('Failed to copy message.');
+      }
+    }
+  };
+
+  const shareViaSMS = () => {
+    if (generatedMessage) {
+      const smsLink = `sms:?body=${encodeURIComponent(generatedMessage)}`;
+      window.open(smsLink, '_self');
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label htmlFor="location" className="block text-gray-700 text-sm font-bold mb-2">
+          Your Current Location (e.g., "Bulacan, Philippines" or specific address):
+        </label>
+        <input
+          type="text"
+          id="location"
+          className="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-400"
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          placeholder="e.g., My home in Quezon City"
+        />
+      </div>
+      <div>
+        <label htmlFor="status" className="block text-gray-700 text-sm font-bold mb-2">
+          Your Status:
+        </label>
+        <select
+          id="status"
+          className="shadow border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-400"
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+        >
+          <option value="Safe and sound">Safe and sound</option>
+          <option value="Need assistance (food, water)">Need assistance (pagkain, tubig)</option>
+          <option value="Stranded (cannot move)">Cannot move</option>
+          <option value="Injured / Medical attention needed">Injured / Medical attention needed</option>
+        </select>
+      </div>
+      <div>
+        <label htmlFor="customMessage" className="block text-gray-700 text-sm font-bold mb-2">
+          Additional Message (optional):
+        </label>
+        <textarea
+          id="customMessage"
+          rows="3"
+          className="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-400"
+          value={customMessage}
+          onChange={(e) => setCustomMessage(e.target.value)}
+          placeholder="ex: Sugatan ako, need ng rescue!"
+        ></textarea>
+      </div>
+      <div>
+        <label htmlFor="contactNumber" className="block text-gray-700 text-sm font-bold mb-2">
+          Contact Number (optional):
+        </label>
+        <input
+          type="tel"
+          id="contactNumber"
+          className="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-400"
+          value={contactNumber}
+          onChange={(e) => setContactNumber(e.target.value)}
+          placeholder="e.g., +639171234567"
+        />
+      </div>
+      <button
+        onClick={generateMessage}
+        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+      >
+        Generate Safety Message
+      </button>
+      {generatedMessage && (
+        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg shadow-inner">
+          <p className="font-semibold text-blue-800 mb-2">Your Generated Message:</p>
+          <p className="text-gray-800 break-words bg-white p-3 rounded-md border border-gray-200">
+            {generatedMessage}
+>>>>>>> d199eda5f946f35d56b646ec43f8e0175126d2cf
           </p>
           {showGeolocationTip && (
             <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded-lg relative w-full max-w-3xl mb-6 shadow-md" role="alert">
@@ -839,4 +1296,94 @@ const App = () => {
     </div>
   );
 };
+<<<<<<< HEAD
+=======
+
+const FloodReporter = ({ userLat, userLon, db, userId, isAuthReady }) => {
+  const [floodLevel, setFloodLevel] = useState('All Good!');
+  const [message, setMessage] = useState('');
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showResultModal, setShowResultModal] = useState(false);
+  const [resultMessage, setResultMessage] = useState('');
+
+  const handleReport = async () => {
+    if (!db || !isAuthReady || !userId) {
+      setResultMessage("Please wait for authentication and database to initialize.");
+      setShowResultModal(true);
+      return;
+    }
+    setShowConfirmModal(true);
+  };
+
+  const confirmReport = async () => {
+    setShowConfirmModal(false);
+    try {
+      const effectiveAppId = "faceattendancerealtime-fbdf2";
+      const reportRef = ref(db, `artifacts/${effectiveAppId}/public/data/currentFloodStatusByUsers/${userId}`);
+      await set(reportRef, {
+        latitude: userLat,
+        longitude: userLon,
+        floodLevel,
+        message,
+        timestamp: Date.now(),
+      });
+      setResultMessage("✅ Report successfully sent!");
+      setShowResultModal(true);
+      setMessage(""); // Clear input
+    } catch (error) {
+      console.error("Error sending report:", error);
+      setResultMessage("❌ Failed to send report. Please try again.");
+      setShowResultModal(true);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {showConfirmModal && (
+        <CustomMessageModal
+          message="Confirm your location? To protect your privacy, make sure you’re not at home. Para sa iyong privacy, siguraduhin na hindi ka nasa bahay."
+          onConfirm={confirmReport}
+          onCancel={() => setShowConfirmModal(false)}
+        />
+      )}
+      {showResultModal && (
+        <CustomMessageModal
+          message={resultMessage}
+          onCancel={() => setShowResultModal(false)}
+        />
+      )}
+      <div>
+        <label htmlFor="floodLevel" className="block text-gray-700 text-sm font-bold mb-2">
+          Current status at Your Location:
+        </label>
+        <select
+          id="floodLevel"
+          className="shadow border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-400"
+          value={floodLevel}
+          onChange={(e) => setFloodLevel(e.target.value)}
+        >
+          <option value="All Good">All Good - No need to worry, I'm okay!</option>
+          <option value="Minor Injury"> Minor Injury - May konting gasgas lang or sprain.</option>
+          <option value="Medical Assistance">Medical Assistance - Need ng aid, like first aid or water.</option>
+          <option value="Urgent Care Needed"> Urgent Care Needed - Masakit na, need a medic right away.</option>
+          <option value="Emergency Situation"> Help Me - Grabe, nasa emergency situation ako.</option>
+        </select>
+      </div>
+      <label className="block font-semibold text-gray-700 mb-2">Additional Details (optional):</label>
+      <textarea
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        className="w-full border border-gray-300 rounded-lg p-2 mb-4"
+        placeholder="Type here..."
+      />
+      <button
+        onClick={handleReport}
+        className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition"
+      >
+        Send Report
+      </button>
+    </div>
+  );
+};
+>>>>>>> d199eda5f946f35d56b646ec43f8e0175126d2cf
 export default App;
