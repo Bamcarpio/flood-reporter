@@ -1,161 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getDatabase, ref, set, onValue } from 'firebase/database';
 
-// Global variables for Firebase configuration provided by the Canvas environment
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-    apiKey: "AIzaSyDlT5sCVMBZSWqYTu9hhstp4Fr7N66SWss",
-    authDomain: "faceattendancerealtime-fbdf2.firebaseapp.com",
-    databaseURL: "https://faceattendancerealtime-fbdf2-default-rtdb.firebaseio.com",
-    projectId: "faceattendancerealtime-fbdf2",
-    storageBucket: "faceattendancerealtime-fbdf2.appspot.com",
-    messagingSenderId: "338410759674",
-    appId: "1:338410759674:web:c6820d269c0029128a3043",
-    measurementId: "G-NQDD7MCT09"
-};
-const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-const appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
-
-
-// Function to convert a Base64 string to an ArrayBuffer
-function base64ToArrayBuffer(base64) {
-  const binaryString = atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes.buffer;
+// Note: This code assumes Leaflet is loaded via a CDN in your index.html
+// This check prevents an error if the script hasn't loaded yet.
+if (typeof L !== 'undefined') {
+  delete L.Icon.Default.prototype._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
+    iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+    shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+  });
 }
-
-const WalkieTalkie = ({ db, userId, isAuthReady, showModal }) => {
-  const [isRecording, setIsRecording] = useState(false);
-  const [isSending, setIsSending] = useState(false);
-  const [status, setStatus] = useState('Ready');
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-
-  useEffect(() => {
-    if (!isAuthReady) return;
-
-    // Listen for incoming messages from other users
-    const walkieTalkieRef = ref(db, `artifacts/${appId}/public/data/walkieTalkie`);
-    const unsubscribe = onValue(walkieTalkieRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        for (const senderId in data) {
-          if (senderId !== userId) { // Play only messages from other users
-            const message = data[senderId];
-            if (message && message.audio) {
-              const audioBlob = new Blob([base64ToArrayBuffer(message.audio)], { type: message.mimeType });
-              const audioUrl = URL.createObjectURL(audioBlob);
-              const audio = new Audio(audioUrl);
-              setStatus(`Playing message from user: ${senderId.substring(0, 8)}...`);
-              audio.play();
-              audio.onended = () => {
-                setStatus('Ready');
-                URL.revokeObjectURL(audioUrl);
-              };
-            }
-          }
-        }
-      }
-    }, (error) => {
-      console.error("Error listening to walkie-talkie channel:", error);
-    });
-
-    return () => unsubscribe();
-  }, [db, isAuthReady, userId]);
-
-  const startRecording = async () => {
-    if (!db || !isAuthReady || !userId) {
-      showModal("Error", "Please wait for authentication and database to initialize.");
-      return;
-    }
-    
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      audioChunksRef.current = [];
-
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        audioChunksRef.current.push(event.data);
-      };
-
-      mediaRecorderRef.current.onstop = async () => {
-        setIsSending(true);
-        setStatus('Sending...');
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        
-        // Convert blob to Base64 string for Realtime Database storage
-        const reader = new FileReader();
-        reader.readAsDataURL(audioBlob);
-        reader.onloadend = async () => {
-          const base64data = reader.result.split(',')[1];
-          try {
-            const messageRef = ref(db, `artifacts/${appId}/public/data/walkieTalkie/${userId}`);
-            await set(messageRef, {
-              audio: base64data,
-              mimeType: 'audio/webm',
-              timestamp: Date.now(),
-            });
-            setStatus('Message sent!');
-            setTimeout(() => setStatus('Ready'), 3000);
-          } catch (error) {
-            console.error("Error sending audio:", error);
-            showModal("Error", "Failed to send voice message. Please try again.");
-            setStatus('Error sending message');
-          } finally {
-            setIsSending(false);
-          }
-        };
-      };
-
-      mediaRecorderRef.current.start();
-      setIsRecording(true);
-      setStatus('Recording...');
-    } catch (err) {
-      console.error('Error accessing microphone:', err);
-      showModal("Microphone Error", "Failed to access your microphone. Please ensure permissions are granted.");
-      setStatus('Microphone access denied');
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-      setIsRecording(false);
-    }
-  };
-
-  return (
-    <div className="flex flex-col items-center space-y-4">
-      <p className="text-sm font-semibold text-gray-700">Status: <span className={`${isRecording ? 'text-red-500' : isSending ? 'text-yellow-500' : 'text-green-500'}`}>{status}</span></p>
-      <button
-        onMouseDown={startRecording}
-        onMouseUp={stopRecording}
-        onTouchStart={startRecording}
-        onTouchEnd={stopRecording}
-        className={`
-          w-24 h-24 rounded-full shadow-lg transition-all duration-200 ease-in-out
-          ${isRecording ? 'bg-red-600 animate-pulse' : 'bg-blue-600'}
-          text-white text-sm font-bold flex items-center justify-center
-          transform active:scale-95 focus:outline-none
-          focus:ring-4 focus:ring-blue-300
-        `}
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 14c-1.66 0-3-1.34-3-3V5c0-1.66 1.34-3 3-3s3 1.34 3 3v6c0 1.66-1.34 3-3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-        </svg>
-      </button>
-      <span className="text-lg font-bold text-gray-800">{isRecording ? 'Release to Send' : 'Press to Talk'}</span>
-      <p className="text-xs text-gray-500 mt-2">Hold the button to record, release to send.</p>
-    </div>
-  );
-};
-
 
 const App = () => {
   // New state for password protection
@@ -197,23 +54,29 @@ const App = () => {
     setModal({ ...modal, isOpen: false });
   };
 
-  const handlePasswordSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      // NOTE: This is a placeholder for a real authentication endpoint.
-      // In a real application, you would not hardcode a password in the client.
-      const correctPassword = "onepiece";
-      if (passwordInput.trim() === correctPassword) {
-        setIsAuthenticated(true);
-        setPasswordError('');
-        localStorage.setItem('isAuthenticated', 'true');
-      } else {
-        setPasswordError('Incorrect password. Please try again.');
-      }
-    } catch (error) {
-      setPasswordError('An error occurred. Please try again.');
+const handlePasswordSubmit = async (e) => {
+  e.preventDefault();
+  try {
+    const response = await fetch('/api/checkPassword', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ password: passwordInput.trim() }),
+    });
+    const data = await response.json();
+
+    if (data.success) {
+      setIsAuthenticated(true);
+      setPasswordError('');
+      localStorage.setItem('isAuthenticated', 'true');
+    } else {
+      setPasswordError('Incorrect password. Please try again.');
     }
-  };
+  } catch (error) {
+    setPasswordError('An error occurred. Please try again.');
+  }
+};
   // Function to handle logout
   const handleLogout = () => {
     setIsAuthenticated(false);
@@ -232,6 +95,17 @@ const App = () => {
   useEffect(() => {
     const initFirebase = async () => {
       try {
+        const firebaseConfig = {
+          apiKey: "AIzaSyDlT5sCVMBZSWqYTu9hhstp4Fr7N66SWss",
+          authDomain: "faceattendancerealtime-fbdf2.firebaseapp.com",
+          databaseURL: "https://faceattendancerealtime-fbdf2-default-rtdb.firebaseio.com",
+          projectId: "faceattendancerealtime-fbdf2",
+          storageBucket: "faceattendancerealtime-fbdf2.appspot.com",
+          messagingSenderId: "338410759674",
+          appId: "1:338410759674:web:c6820d269c0029128a3043",
+          measurementId: "G-NQDD7MCT09"
+        };
+        const effectiveAppId = firebaseConfig.projectId;
         const app = initializeApp(firebaseConfig);
         const realtimeDb = getDatabase(app);
         const firebaseAuth = getAuth(app);
@@ -239,16 +113,12 @@ const App = () => {
         setAuth(firebaseAuth);
 
         try {
-          if (initialAuthToken) {
-            await signInWithCustomToken(firebaseAuth, initialAuthToken);
-          } else {
-            if (!firebaseAuth.currentUser) {
-              await signInAnonymously(firebaseAuth);
-            }
+          if (!firebaseAuth.currentUser) {
+            await signInAnonymously(firebaseAuth);
           }
         } catch (error) {
-          console.error("Firebase authentication error:", error);
-          setLocationError("Failed to sign in. Community features may not work.");
+          console.error("Firebase anonymous authentication error:", error);
+          setLocationError("Failed to sign in anonymously. Community features may not work.");
         }
 
         const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
@@ -334,17 +204,6 @@ const App = () => {
         console.warn("Leaflet (L) is not loaded. Please ensure you have added the Leaflet CDN script to your index.html.");
         return;
       }
-      // Fix for TypeError: Cannot read properties of undefined (reading 'Default')
-      // Ensure Leaflet's default icon is configured only after the library is loaded.
-      if (L.Icon && L.Icon.Default) {
-        delete L.Icon.Default.prototype._getIconUrl;
-        L.Icon.Default.mergeOptions({
-          iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
-          iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
-          shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
-        });
-      }
-      
       if (!mapRef.current) {
         const map = L.map('map').setView([userLatLon.lat, userLatLon.lon], 7);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -411,8 +270,9 @@ const App = () => {
 
   useEffect(() => {
     if (db && isAuthReady && isAuthenticated) {
-      const floodReportsRef = ref(db, `artifacts/${appId}/public/data/currentFloodStatusByUsers`);
-      console.log("Fetching flood reports from RTDB path:", `artifacts/${appId}/public/data/currentFloodStatusByUsers`);
+      const effectiveAppId = "faceattendancerealtime-fbdf2";
+      const floodReportsRef = ref(db, `artifacts/${effectiveAppId}/public/data/currentFloodStatusByUsers`);
+      console.log("Fetching flood reports from RTDB path:", `artifacts/${effectiveAppId}/public/data/currentFloodStatusByUsers`);
 
       const unsubscribe = onValue(floodReportsRef, (snapshot) => {
         const data = snapshot.val();
@@ -648,7 +508,7 @@ const App = () => {
       const onConfirm = async () => {
         closeModal();
         try {
-          const reportRef = ref(db, `artifacts/${appId}/public/data/currentFloodStatusByUsers/${userId}`);
+          const reportRef = ref(db, `artifacts/faceattendancerealtime-fbdf2/public/data/currentFloodStatusByUsers/${userId}`);
           await set(reportRef, {
             latitude: userLat,
             longitude: userLon,
@@ -954,7 +814,7 @@ const App = () => {
               )}
             </div>
           </div>
-          <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-3xl mb-8 border border-blue-200">
+          <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-3xl border border-blue-200">
             <h2 className="text-3xl font-bold text-blue-700 mb-4 flex items-center">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mr-3 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2A10 10 0 1 0 22 12A10 10 0 0 0 12 2ZM12 20A8 8 0 1 1 20 12A8 8 0 0 1 12 20ZM12 4a8 8 0 0 0-7.07 12.07l.71-.71A7 7 0 0 1 12 5a7 7 0 0 1 7 7a7 7 0 0 1-7 7a7 7 0 0 1-7-7a1 1 0 0 0-2 0a9 9 0 0 0 9 9a9 9 0 0 0 9-9A9 9 0 0 0 12 4Z" />
@@ -967,19 +827,6 @@ const App = () => {
               Send a quick status update with your location para alam ng fam, friends kung nasaan ka at anong need mo.
             </p>
             <SafetyBeacon userLat={userLatLon.lat} userLon={userLatLon.lon} />
-          </div>
-          <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-3xl mt-8 border border-blue-200">
-            <h2 className="text-3xl font-bold text-blue-700 mb-4 flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mr-3 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v2h3l2.84 2.84c-.65.35-1.37.59-2.14.73zm7.45-2.73L15 14h-3V9l-5.16-5.16C7.38 3.23 8.66 3 10 3c3.87 0 7 3.13 7 7 0 1.34-.38 2.62-1.05 3.72z" />
-              </svg>
-              Walkie-Talkie
-            </h2>
-            <p className="text-gray-700 mb-4">
-              Hold the button to record a voice message and share it with everyone using the app.
-              Listen for incoming messages from others.
-            </p>
-            <WalkieTalkie db={db} userId={userId} isAuthReady={isAuthReady} showModal={showModal} />
           </div>
           <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-3xl mt-8 border border-blue-200 text-center">
             <h2 className="text-2xl font-bold text-blue-700 mb-3">
