@@ -644,7 +644,14 @@ const App = () => {
                     });
                 }
             }
-            loadedMessages.sort((a, b) => a.timestamp - b.timestamp);
+            // Sort messages by timestamp, with message ID as a tie-breaker
+            loadedMessages.sort((a, b) => {
+              const timestampDiff = a.timestamp - b.timestamp;
+              if (timestampDiff !== 0) {
+                return timestampDiff;
+              }
+              return a.id.localeCompare(b.id);
+            });
             setMessages(loadedMessages);
         });
 
@@ -658,11 +665,12 @@ const App = () => {
 
     const handleSendMessage = async (e) => {
         e.preventDefault();
-        if (newMessage.trim() === '' || !db || !isAuthReady || !userId) return;
+        const trimmedMessage = newMessage.trim();
+        if (trimmedMessage === '' || !db || !isAuthReady || !userId) return;
         
         const messageData = {
             userId,
-            text: newMessage,
+            text: trimmedMessage,
             timestamp: Date.now()
         };
 
