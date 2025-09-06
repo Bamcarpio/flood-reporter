@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getDatabase, ref, set, onValue } from 'firebase/database';
+import { getDatabase, ref, set, onValue, push } from 'firebase/database';
 
 // Note: This code assumes Leaflet is loaded via a CDN in your index.html
 // This check prevents an error if the script hasn't loaded yet.
-if (typeof L !== 'undefined') {
+if (typeof L !== 'undefined' && L.Icon && L.Icon.Default) {
   delete L.Icon.Default.prototype._getIconUrl;
   L.Icon.Default.mergeOptions({
     iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
@@ -54,29 +54,29 @@ const App = () => {
     setModal({ ...modal, isOpen: false });
   };
 
-const handlePasswordSubmit = async (e) => {
-  e.preventDefault();
-  try {
-    const response = await fetch('/api/checkPassword', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ password: passwordInput.trim() }),
-    });
-    const data = await response.json();
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch('/api/checkPassword', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password: passwordInput.trim() }),
+      });
+      const data = await response.json();
 
-    if (data.success) {
-      setIsAuthenticated(true);
-      setPasswordError('');
-      localStorage.setItem('isAuthenticated', 'true');
-    } else {
-      setPasswordError('Incorrect password. Please try again.');
+      if (data.success) {
+        setIsAuthenticated(true);
+        setPasswordError('');
+        localStorage.setItem('isAuthenticated', 'true');
+      } else {
+        setPasswordError('Incorrect password. Please try again.');
+      }
+    } catch (error) {
+      setPasswordError('An error occurred. Please try again.');
     }
-  } catch (error) {
-    setPasswordError('An error occurred. Please try again.');
-  }
-};
+  };
   // Function to handle logout
   const handleLogout = () => {
     setIsAuthenticated(false);
@@ -568,6 +568,212 @@ const handlePasswordSubmit = async (e) => {
     );
   };
 
+  // New WalkieTalkie component for voice messaging
+  const WalkieTalkie = ({ db, userId, isAuthReady, showModal }) => {
+    const [isRecording, setIsRecording] = useState(false);
+    const [recentMessages, setRecentMessages] = useState([]);
+    const mediaRecorderRef = useRef(null);
+    const audioChunksRef = useRef([]);
+    const [currentlyPlaying, setCurrentlyPlaying] = useState(null);
+    const audioPlayerRef = useRef(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    const effectiveAppId = "faceattendancerealtime-fbdf2";
+    const messagesRef = ref(db, `artifacts/${effectiveAppId}/public/data/voiceMessages`);
+
+    // Effect to fetch and listen for new voice messages
+    useEffect(() => {
+      if (!db || !isAuthReady || !userId) {
+        setIsLoading(false);
+        return;
+      }
+      setIsLoading(true);
+
+      const unsubscribe = onValue(messagesRef, (snapshot) => {
+        const data = snapshot.val();
+        const messages = [];
+        if (data) {
+          for (let key in data) {
+            messages.push({
+              id: key,
+              ...data[key]
+            });
+          }
+        }
+        messages.sort((a, b) => b.timestamp - a.timestamp);
+        setRecentMessages(messages);
+        setIsLoading(false);
+      }, (error) => {
+        console.error("Error fetching voice messages:", error);
+        setIsLoading(false);
+      });
+
+      return () => unsubscribe();
+    }, [db, isAuthReady, userId]);
+
+    // Function to start audio recording on button press (touch or mouse)
+    const startRecording = async () => {
+      if (!db || !isAuthReady || !userId) {
+        showModal("Error", "Please wait for authentication and database to initialize.");
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorderRef.current = new MediaRecorder(stream);
+        audioChunksRef.current = [];
+        setIsRecording(true);
+
+        mediaRecorderRef.current.ondataavailable = (event) => {
+          audioChunksRef.current.push(event.data);
+        };
+
+        mediaRecorderRef.current.onstop = () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm; codecs=opus' });
+          const reader = new FileReader();
+          reader.readAsDataURL(audioBlob);
+          reader.onloadend = () => {
+            const base64data = reader.result;
+            const messageData = {
+              userId,
+              audio: base64data,
+              timestamp: Date.now()
+            };
+
+            try {
+              push(messagesRef, messageData);
+              showModal("Success", "Voice message sent!");
+            } catch (error) {
+              console.error("Error sending voice message:", error);
+              showModal("Error", "Failed to send voice message. Please try again.");
+            }
+          };
+          // Stop the stream tracks to free up the microphone
+          stream.getTracks().forEach(track => track.stop());
+        };
+
+        mediaRecorderRef.current.start();
+      } catch (err) {
+        console.error("Error accessing microphone:", err);
+        showModal("Error", "Failed to access microphone. Please ensure permissions are granted.");
+      }
+    };
+
+    // Function to stop audio recording on button release
+    const stopRecording = () => {
+      if (mediaRecorderRef.current && isRecording) {
+        mediaRecorderRef.current.stop();
+        setIsRecording(false);
+      }
+    };
+
+    // Function to play audio from a Base64 string
+    const playAudio = (audioData, id) => {
+      if (currentlyPlaying) {
+        // Pause any currently playing audio
+        audioPlayerRef.current.pause();
+        setCurrentlyPlaying(null);
+      }
+
+      const audio = new Audio(audioData);
+      audioPlayerRef.current = audio;
+      setCurrentlyPlaying(id);
+      audio.play();
+
+      audio.onended = () => {
+        setCurrentlyPlaying(null);
+      };
+
+      audio.onerror = (err) => {
+        console.error("Error playing audio:", err);
+        showModal("Playback Error", "Failed to play the audio file.");
+        setCurrentlyPlaying(null);
+      };
+    };
+
+    return (
+      <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-3xl mb-8 border border-blue-200">
+        <h2 className="text-3xl font-bold text-blue-700 mb-4 flex items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mr-3 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 14c2.21 0 4-1.79 4-4V5c0-2.21-1.79-4-4-4S8 2.79 8 5v5c0 2.21 1.79 4 4 4z" />
+            <path d="M11 18.91V21h2v-2.09c4.54-.53 8-4.32 8-8.91h-2c0 4.28-3.32 7.7-7.5 7.7S4 14.28 4 10H2c0 5.48 4.52 9.8 10 9.91z" />
+          </svg>
+          Community Walkie-Talkie
+        </h2>
+        <p className="text-gray-700 mb-4">
+          Mag-iwan ng voice message para sa ibang tao sa komunidad. Pindutin ang "Talk" para mag-record, bitawan para i-send.
+        </p>
+
+        <div className="flex flex-col items-center justify-center p-6 border border-dashed border-gray-300 rounded-lg">
+          <button
+            onMouseDown={startRecording}
+            onMouseUp={stopRecording}
+            onTouchStart={startRecording}
+            onTouchEnd={stopRecording}
+            className={`w-36 h-36 rounded-full text-white font-bold text-lg flex items-center justify-center transition-all duration-300 shadow-xl focus:outline-none ${isRecording ? 'bg-red-600 animate-pulse scale-110' : 'bg-green-600 hover:bg-green-700 hover:scale-105'}`}
+            disabled={!db || !isAuthReady || !userId}
+          >
+            {isRecording ? 'Recording...' : 'Talk'}
+          </button>
+          <p className="mt-4 text-gray-500">
+            {isRecording ? 'Release to Send' : 'Press and hold to record'}
+          </p>
+          {!db || !isAuthReady || !userId ? (
+            <p className="mt-2 text-red-500 text-sm">Waiting for authentication...</p>
+          ) : (
+            <p className="mt-2 text-sm text-gray-500">Your ID: {userId}</p>
+          )}
+        </div>
+
+        <div className="mt-8">
+          <h3 className="text-2xl font-bold text-blue-700 mb-3 flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M4 14.5A2.5 2.5 0 0 1 6.5 12H8V7a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6.5A2.5 2.5 0 0 1 4 14.5zM12 5h4v5h-4V5zm-4 7h4v5H8v-5z" />
+            </svg>
+            Recent Voice Messages
+          </h3>
+          {isLoading ? (
+            <div className="text-center py-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+              <p className="text-gray-600">Loading messages...</p>
+            </div>
+          ) : recentMessages.length > 0 ? (
+            <div className="space-y-4">
+              {recentMessages.map((message) => (
+                <div key={message.id} className="p-4 bg-gray-100 rounded-lg shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold text-sm text-gray-700">
+                      Message from: <span className="text-blue-600 font-mono text-xs break-all">{message.userId}</span>
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {new Date(message.timestamp).toLocaleString()}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => playAudio(message.audio, message.id)}
+                    className="p-2 rounded-full bg-blue-500 text-white shadow-md transition duration-300 ease-in-out hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  >
+                    {currentlyPlaying === message.id ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-600 text-center">No voice messages yet. Be the first to talk!</p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen rally-bg font-inter text-gray-800 flex flex-col items-center justify-center relative">
       <style>
@@ -775,52 +981,6 @@ const handlePasswordSubmit = async (e) => {
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mr-3 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v2h3l2.84 2.84c-.65.35-1.37.59-2.14.73zm7.45-2.73L15 14h-3V9l-5.16-5.16C7.38 3.23 8.66 3 10 3c3.87 0 7 3.13 7 7 0 1.34-.38 2.62-1.05 3.72z" />
               </svg>
-              Community Watch
-              {userId && (
-                <span className="ml-auto text-sm text-gray-500"></span>
-              )}
-            </h2>
-            <p className="text-gray-700 mb-4">
-              Tulong-tulong tayo. I-update kung kung ano ganap sa lugar mo para aware din ’yung iba. Check real-time reports sa map sa taas.
-            </p>
-            <FloodReporter userLat={userLatLon.lat} userLon={userLatLon.lon} db={db} userId={userId} isAuthReady={isAuthReady} showModal={showModal} />
-            <div className="mt-6">
-              <h3 className="text-2xl font-bold text-blue-700 mb-3 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 mr-2 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v2h3l2.84 2.84c-.65.35-1.37.59-2.14.73zm7.45-2.73L15 14h-3V9l-5.16-5.16C7.38 3.23 8.66 3 10 3c3.87 0 7 3.13 7 7 0 1.34-.38 2.62-1.05 3.72z" />
-                </svg>
-                Latest Reports
-              </h3>
-              {floodReports.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {floodReports.slice(0, 6).map((report) => (
-                    <div key={report.id} className="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200">
-                      <p className="font-semibold text-blue-800">{report.floodLevel}</p>
-                      <p className="text-gray-700 text-sm">{report.message || 'No additional details.'}</p>
-                      <p className="text-gray-500 text-xs mt-1">
-                        {new Date(report.timestamp).toLocaleString()}
-                      </p>
-                      <button
-                        onClick={() => handleViewOnMap(report.latitude, report.longitude, report.message)}
-                        className="mt-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold py-1 px-3 rounded-full transition duration-200 ease-in-out"
-                      >
-                        View on Map
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-600">No reports yet. Be the first to report!</p>
-              )}
-            </div>
-          </div>
-          <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-3xl border border-blue-200">
-            <h2 className="text-3xl font-bold text-blue-700 mb-4 flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mr-3 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2A10 10 0 1 0 22 12A10 10 0 0 0 12 2ZM12 20A8 8 0 1 1 20 12A8 8 0 0 1 12 20ZM12 4a8 8 0 0 0-7.07 12.07l.71-.71A7 7 0 0 1 12 5a7 7 0 0 1 7 7a7 7 0 0 1-7 7a7 7 0 0 1-7-7a1 1 0 0 0-2 0a9 9 0 0 0 9 9a9 9 0 0 0 9-9A9 9 0 0 0 12 4Z" />
-                <path d="M12 17.5a.75.75 0 0 1-.75-.75V15a.75.75 0 0 1 1.5 0v1.75a.75.75 0 0 1-.75.75Z" />
-                <path d="M12 12.75a.75.75 0 0 1-.75-.75V6a.75.75 0 0 1 1.5 0v6a.75.75 0 0 1-.75.75Z" />
-              </svg>
               Safety Beacon
             </h2>
             <p className="text-gray-700 mb-4">
@@ -828,6 +988,7 @@ const handlePasswordSubmit = async (e) => {
             </p>
             <SafetyBeacon userLat={userLatLon.lat} userLon={userLatLon.lon} />
           </div>
+          <WalkieTalkie db={db} userId={userId} isAuthReady={isAuthReady} showModal={showModal} />
           <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-3xl mt-8 border border-blue-200 text-center">
             <h2 className="text-2xl font-bold text-blue-700 mb-3">
               Developer Information
