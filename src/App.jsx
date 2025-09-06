@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getDatabase, ref, set, onValue, push } from 'firebase/database';
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // Note: This code assumes Leaflet is loaded via a CDN in your index.html
 // This check prevents an error if the script hasn't loaded yet.
@@ -39,6 +40,7 @@ const App = () => {
   const [showGeolocationTip, setShowGeolocationTip] = useState(true);
   const [db, setDb] = useState(null);
   const [auth, setAuth] = useState(null);
+  const [storage, setStorage] = useState(null);
   const [userId, setUserId] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [floodReports, setFloodReports] = useState([]);
@@ -109,8 +111,10 @@ const App = () => {
         const app = initializeApp(firebaseConfig);
         const realtimeDb = getDatabase(app);
         const firebaseAuth = getAuth(app);
+        const firebaseStorage = getStorage(app);
         setDb(realtimeDb);
         setAuth(firebaseAuth);
+        setStorage(firebaseStorage);
 
         try {
           if (!firebaseAuth.currentUser) {
@@ -569,7 +573,7 @@ const App = () => {
   };
 
   // New WalkieTalkie component for voice messaging
-  const WalkieTalkie = ({ db, userId, isAuthReady, showModal }) => {
+  const WalkieTalkie = ({ db, userId, isAuthReady, showModal, storage }) => {
     const [isRecording, setIsRecording] = useState(false);
     const [recentMessages, setRecentMessages] = useState([]);
     const mediaRecorderRef = useRef(null);
@@ -611,63 +615,66 @@ const App = () => {
       return () => unsubscribe();
     }, [db, isAuthReady, userId]);
 
-    // Function to start audio recording on button press (touch or mouse)
-    const startRecording = async () => {
-      if (!db || !isAuthReady || !userId) {
+    // Function to toggle recording on and off
+    const toggleRecording = async () => {
+      if (!db || !isAuthReady || !userId || !storage) {
         showModal("Error", "Please wait for authentication and database to initialize.");
         return;
       }
 
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorderRef.current = new MediaRecorder(stream);
-        audioChunksRef.current = [];
-        setIsRecording(true);
+      if (!isRecording) {
+        // Start recording
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorderRef.current = new MediaRecorder(stream);
+          audioChunksRef.current = [];
+          setIsRecording(true);
 
-        mediaRecorderRef.current.ondataavailable = (event) => {
-          audioChunksRef.current.push(event.data);
-        };
+          mediaRecorderRef.current.ondataavailable = (event) => {
+            audioChunksRef.current.push(event.data);
+          };
 
-        mediaRecorderRef.current.onstop = () => {
-          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm; codecs=opus' });
-          const reader = new FileReader();
-          reader.readAsDataURL(audioBlob);
-          reader.onloadend = () => {
-            const base64data = reader.result;
-            const messageData = {
-              userId,
-              audio: base64data,
-              timestamp: Date.now()
-            };
+          mediaRecorderRef.current.onstop = async () => {
+            const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm; codecs=opus' });
+            const filename = `voice_message_${Date.now()}.webm`;
+            const audioStorageRef = storageRef(storage, `artifacts/${effectiveAppId}/public/audio/${filename}`);
 
             try {
-              push(messagesRef, messageData);
+              // Upload audio blob to Firebase Storage
+              await uploadBytes(audioStorageRef, audioBlob);
+              const downloadUrl = await getDownloadURL(audioStorageRef);
+
+              // Save the download URL to Realtime Database
+              const messageData = {
+                userId,
+                audio: downloadUrl,
+                timestamp: Date.now()
+              };
+              await push(messagesRef, messageData);
               showModal("Success", "Voice message sent!");
             } catch (error) {
               console.error("Error sending voice message:", error);
               showModal("Error", "Failed to send voice message. Please try again.");
             }
+            // Stop the stream tracks to free up the microphone
+            stream.getTracks().forEach(track => track.stop());
           };
-          // Stop the stream tracks to free up the microphone
-          stream.getTracks().forEach(track => track.stop());
-        };
 
-        mediaRecorderRef.current.start();
-      } catch (err) {
-        console.error("Error accessing microphone:", err);
-        showModal("Error", "Failed to access microphone. Please ensure permissions are granted.");
+          mediaRecorderRef.current.start();
+        } catch (err) {
+          console.error("Error accessing microphone:", err);
+          showModal("Error", "Failed to access microphone. Please ensure permissions are granted.");
+        }
+      } else {
+        // Stop recording
+        if (mediaRecorderRef.current) {
+          mediaRecorderRef.current.stop();
+          setIsRecording(false);
+        }
       }
     };
 
-    // Function to stop audio recording on button release
-    const stopRecording = () => {
-      if (mediaRecorderRef.current && isRecording) {
-        mediaRecorderRef.current.stop();
-        setIsRecording(false);
-      }
-    };
-
-    // Function to play audio from a Base64 string
+    // Function to play audio from a download URL
     const playAudio = (audioData, id) => {
       if (currentlyPlaying) {
         // Pause any currently playing audio
@@ -701,22 +708,19 @@ const App = () => {
           Community Walkie-Talkie
         </h2>
         <p className="text-gray-700 mb-4">
-          Mag-iwan ng voice message para sa ibang tao sa komunidad. Pindutin ang "Talk" para mag-record, bitawan para i-send.
+          Mag-iwan ng voice message para sa ibang tao sa komunidad. Pindutin ang "Talk" para mag-record, pindutin ulit para i-send.
         </p>
 
         <div className="flex flex-col items-center justify-center p-6 border border-dashed border-gray-300 rounded-lg">
           <button
-            onMouseDown={startRecording}
-            onMouseUp={stopRecording}
-            onTouchStart={startRecording}
-            onTouchEnd={stopRecording}
+            onClick={toggleRecording}
             className={`w-36 h-36 rounded-full text-white font-bold text-lg flex items-center justify-center transition-all duration-300 shadow-xl focus:outline-none ${isRecording ? 'bg-red-600 animate-pulse scale-110' : 'bg-green-600 hover:bg-green-700 hover:scale-105'}`}
             disabled={!db || !isAuthReady || !userId}
           >
             {isRecording ? 'Recording...' : 'Talk'}
           </button>
           <p className="mt-4 text-gray-500">
-            {isRecording ? 'Release to Send' : 'Press and hold to record'}
+            {isRecording ? 'Tap to Stop' : 'Tap to Record'}
           </p>
           {!db || !isAuthReady || !userId ? (
             <p className="mt-2 text-red-500 text-sm">Waiting for authentication...</p>
@@ -738,7 +742,7 @@ const App = () => {
               <p className="text-gray-600">Loading messages...</p>
             </div>
           ) : recentMessages.length > 0 ? (
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto max-h-60">
               {recentMessages.map((message) => (
                 <div key={message.id} className="p-4 bg-gray-100 rounded-lg shadow-sm flex items-center justify-between">
                   <div>
@@ -988,7 +992,7 @@ const App = () => {
             </p>
             <SafetyBeacon userLat={userLatLon.lat} userLon={userLatLon.lon} />
           </div>
-          <WalkieTalkie db={db} userId={userId} isAuthReady={isAuthReady} showModal={showModal} />
+          <WalkieTalkie db={db} userId={userId} isAuthReady={isAuthReady} showModal={showModal} storage={storage} />
           <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-3xl mt-8 border border-blue-200 text-center">
             <h2 className="text-2xl font-bold text-blue-700 mb-3">
               Developer Information
