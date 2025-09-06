@@ -549,7 +549,7 @@ const App = () => {
             <path d="M12 14c2.21 0 4-1.79 4-4V5c0-2.21-1.79-4-4-4S8 2.79 8 5v5c0 2.21 1.79 4 4 4z" />
             <path d="M11 18.91V21h2v-2.09c4.54-.53 8-4.32 8-8.91h-2c0 4.28-3.32 7.7-7.5 7.7S4 14.28 4 10H2c0 5.48 4.52 9.8 10 9.91z" />
           </svg>
-          Community Walkie-Talkie
+          Nakama Walkie-Talkie
         </h2>
         <p className="text-gray-700 mb-4">
           Mag-iwan ng voice message para sa ibang tao sa komunidad. Pindutin ang "Talk" para mag-record, pindutin ulit para i-send.
@@ -569,7 +569,7 @@ const App = () => {
           {!db || !isAuthReady || !userId ? (
             <p className="mt-2 text-red-500 text-sm">Waiting for authentication...</p>
           ) : (
-            <p className="mt-2 text-sm text-gray-500">Your ID: {userId}</p>
+            <p className="mt-2 text-sm text-gray-500"></p>
           )}
         </div>
 
@@ -934,7 +934,7 @@ const App = () => {
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mr-3 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v2h3l2.84 2.84c-.65.35-1.37.59-2.14.73zm7.45-2.73L15 14h-3V9l-5.16-5.16C7.38 3.23 8.66 3 10 3c3.87 0 7 3.13 7 7 0 1.34-.38 2.62-1.05 3.72z" />
               </svg>
-              Community Watch
+              Nakama Watch
               {userId && (
                 <span className="ml-auto text-sm text-gray-500"></span>
               )}
