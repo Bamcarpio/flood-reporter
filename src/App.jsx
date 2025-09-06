@@ -335,171 +335,6 @@ const App = () => {
     }
   };
 
-  const SafetyBeacon = ({ userLat, userLon }) => {
-    const [location, setLocation] = useState('');
-    const [status, setStatus] = useState('Safe and sound');
-    const [customMessage, setCustomMessage] = useState('');
-    const [contactNumber, setContactNumber] = useState('');
-    const [generatedMessage, setGeneratedMessage] = useState('');
-    const [copySuccess, setCopySuccess] = useState('');
-
-    useEffect(() => {
-      const fetchLocationName = async () => {
-        const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${userLat}&lon=${userLon}`;
-        try {
-          const response = await fetch(nominatimUrl, {
-            headers: { 'User-Agent': 'PhilippinesCrisisApp/1.0 (your-email@example.com)' }
-          });
-          const data = await response.json();
-          if (data && data.display_name) {
-            setLocation(data.display_name);
-          } else {
-            setLocation(`Lat: ${userLat.toFixed(4)}, Lon: ${userLon.toFixed(4)}`);
-          }
-        } catch (error) {
-          console.error("Error fetching location name:", error);
-          setLocation(`Lat: ${userLat.toFixed(4)}, Lon: ${userLon.toFixed(4)}`);
-        }
-      };
-
-      if (userLat && userLon) {
-        fetchLocationName();
-      }
-    }, [userLat, userLon]);
-
-    const generateMessage = () => {
-      let message = `Crisis Update: I am ${status}.`;
-      if (location) {
-        message += ` My approximate location is: ${location}.`;
-      } else {
-        message += ` My approximate coordinates are Lat: ${userLat.toFixed(4)}, Lon: ${userLon.toFixed(4)}.`;
-      }
-      if (customMessage) {
-        message += ` Additional info: ${customMessage}.`;
-      }
-      if (contactNumber) {
-        message += ` Please contact me at: ${contactNumber}.`;
-      }
-      message += ``;
-      setGeneratedMessage(message);
-      setCopySuccess('');
-    };
-
-    const copyToClipboard = () => {
-      if (generatedMessage) {
-        try {
-          const textarea = document.createElement('textarea');
-          textarea.value = generatedMessage;
-          document.body.appendChild(textarea);
-          textarea.select();
-          document.execCommand('copy');
-          document.body.removeChild(textarea);
-          setCopySuccess('Message copied to clipboard!');
-        } catch (err) {
-          console.error('Failed to copy text: ', err);
-          setCopySuccess('Failed to copy message.');
-        }
-      }
-    };
-
-    const shareViaSMS = () => {
-      if (generatedMessage) {
-        const smsLink = `sms:?body=${encodeURIComponent(generatedMessage)}`;
-        window.open(smsLink, '_self');
-      }
-    };
-
-    return (
-      <div className="space-y-4">
-        <div>
-          <label htmlFor="location" className="block text-gray-700 text-sm font-bold mb-2">
-            Your Current Location (e.g., "Bulacan, Philippines" or specific address):
-          </label>
-          <input
-            type="text"
-            id="location"
-            className="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-400"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder="e.g., My home in Quezon City"
-          />
-        </div>
-        <div>
-          <label htmlFor="status" className="block text-gray-700 text-sm font-bold mb-2">
-            Your Status:
-          </label>
-          <select
-            id="status"
-            className="shadow border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-400"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-          >
-            <option value="Safe and sound">Safe and sound</option>
-            <option value="Need assistance (food, water)">Need assistance (pagkain, tubig)</option>
-            <option value="Stranded (cannot move)">Cannot move</option>
-            <option value="Injured / Medical attention needed">Injured / Medical attention needed</option>
-            <option value="Moved to a safe zone">Moved to a safe zone</option>
-          </select>
-        </div>
-        <div>
-          <label htmlFor="customMessage" className="block text-gray-700 text-sm font-bold mb-2">
-            Additional Message (optional):
-          </label>
-          <textarea
-            id="customMessage"
-            rows="3"
-            className="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-400"
-            value={customMessage}
-            onChange={(e) => setCustomMessage(e.target.value)}
-            placeholder="ex: Sugatan ako, need ng rescue!"
-          ></textarea>
-        </div>
-        <div>
-          <label htmlFor="contactNumber" className="block text-gray-700 text-sm font-bold mb-2">
-            Contact Number (optional):
-          </label>
-          <input
-            type="tel"
-            id="contactNumber"
-            className="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-400"
-            value={contactNumber}
-            onChange={(e) => setContactNumber(e.target.value)}
-            placeholder="e.g., +639171234567"
-          />
-        </div>
-        <button
-          onClick={generateMessage}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
-        >
-          Generate Safety Message
-        </button>
-        {generatedMessage && (
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg shadow-inner">
-            <p className="font-semibold text-blue-800 mb-2">Your Generated Message:</p>
-            <p className="text-gray-800 break-words bg-white p-3 rounded-md border border-gray-200">
-              {generatedMessage}
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 mt-4">
-              <button
-                onClick={copyToClipboard}
-                className="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2"
-              >
-                Copy to Clipboard
-              </button>
-              <button
-                onClick={shareViaSMS}
-                className="flex-1 bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2"
-              >
-                Share via SMS (Mobile Only)
-              </button>
-            </div>
-            {copySuccess && <p className="text-green-600 text-center mt-2">{copySuccess}</p>}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   const FloodReporter = ({ userLat, userLon, db, userId, isAuthReady, showModal }) => {
     const [floodLevel, setFloodLevel] = useState('All Good!');
     const [message, setMessage] = useState('');
@@ -588,7 +423,7 @@ const App = () => {
 
     // Function to play audio from a download URL
     const playAudio = (audioData, id) => {
-      if (currentlyPlaying) {
+      if (currentlyPlaying && audioPlayerRef.current) {
         // Pause any currently playing audio
         audioPlayerRef.current.pause();
         setCurrentlyPlaying(null);
@@ -994,12 +829,44 @@ const App = () => {
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mr-3 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v2h3l2.84 2.84c-.65.35-1.37.59-2.14.73zm7.45-2.73L15 14h-3V9l-5.16-5.16C7.38 3.23 8.66 3 10 3c3.87 0 7 3.13 7 7 0 1.34-.38 2.62-1.05 3.72z" />
               </svg>
-              Safety Beacon
+              Community Watch
+              {userId && (
+                <span className="ml-auto text-sm text-gray-500"></span>
+              )}
             </h2>
             <p className="text-gray-700 mb-4">
-              Send a quick status update with your location para alam ng fam, friends kung nasaan ka at anong need mo.
+              Tulong-tulong tayo. I-update kung kung ano ganap sa lugar mo para aware din ’yung iba. Check real-time reports sa map sa taas.
             </p>
-            <SafetyBeacon userLat={userLatLon.lat} userLon={userLatLon.lon} />
+            <FloodReporter userLat={userLatLon.lat} userLon={userLatLon.lon} db={db} userId={userId} isAuthReady={isAuthReady} showModal={showModal} />
+            <div className="mt-6">
+              <h3 className="text-2xl font-bold text-blue-700 mb-3 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 mr-2 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v2h3l2.84 2.84c-.65.35-1.37.59-2.14.73zm7.45-2.73L15 14h-3V9l-5.16-5.16C7.38 3.23 8.66 3 10 3c3.87 0 7 3.13 7 7 0 1.34-.38 2.62-1.05 3.72z" />
+                </svg>
+                Latest Reports
+              </h3>
+              {floodReports.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {floodReports.slice(0, 6).map((report) => (
+                    <div key={report.id} className="p-4 bg-blue-50 rounded-lg shadow-sm border border-blue-200">
+                      <p className="font-semibold text-blue-800">{report.floodLevel}</p>
+                      <p className="text-gray-700 text-sm">{report.message || 'No additional details.'}</p>
+                      <p className="text-gray-500 text-xs mt-1">
+                        {new Date(report.timestamp).toLocaleString()}
+                      </p>
+                      <button
+                        onClick={() => handleViewOnMap(report.latitude, report.longitude, report.message)}
+                        className="mt-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold py-1 px-3 rounded-full transition duration-200 ease-in-out"
+                      >
+                        View on Map
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-600">No reports yet. Be the first to report!</p>
+              )}
+            </div>
           </div>
           <WalkieTalkie db={db} userId={userId} isAuthReady={isAuthReady} showModal={showModal} storage={storage} />
           <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-3xl mt-8 border border-blue-200 text-center">
