@@ -622,6 +622,103 @@ const App = () => {
     );
   };
 
+  const Chat = ({ db, userId, isAuthReady, showModal }) => {
+    const [messages, setMessages] = useState([]);
+    const [newMessage, setNewMessage] = useState('');
+    const messagesEndRef = useRef(null);
+
+    const effectiveAppId = "faceattendancerealtime-fbdf2";
+    const chatRef = ref(db, `artifacts/${effectiveAppId}/public/data/chatMessages`);
+
+    useEffect(() => {
+        if (!db || !isAuthReady || !userId) return;
+        
+        const unsubscribe = onValue(chatRef, (snapshot) => {
+            const data = snapshot.val();
+            const loadedMessages = [];
+            if (data) {
+                for (let key in data) {
+                    loadedMessages.push({
+                        id: key,
+                        ...data[key]
+                    });
+                }
+            }
+            loadedMessages.sort((a, b) => a.timestamp - b.timestamp);
+            setMessages(loadedMessages);
+        });
+
+        return () => unsubscribe();
+    }, [db, isAuthReady, userId]);
+
+    // Scrolls to the bottom of the chat when new messages arrive
+    useEffect(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages]);
+
+    const handleSendMessage = async (e) => {
+        e.preventDefault();
+        if (newMessage.trim() === '' || !db || !isAuthReady || !userId) return;
+        
+        const messageData = {
+            userId,
+            text: newMessage,
+            timestamp: Date.now()
+        };
+
+        try {
+            await push(chatRef, messageData);
+            setNewMessage('');
+        } catch (error) {
+            console.error("Error sending message:", error);
+            showModal("Error", "Failed to send message. Please try again.");
+        }
+    };
+
+    return (
+        <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-3xl mb-8 border border-blue-200">
+            <h2 className="text-3xl font-bold text-blue-700 mb-4 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mr-3 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z" />
+                </svg>
+                Community Chat
+            </h2>
+            <p className="text-gray-700 mb-4">
+                Mag-chat sa mga kasamahan mo.
+            </p>
+            <div className="flex flex-col h-80 overflow-y-auto mb-4 p-4 rounded-lg bg-gray-50 border border-gray-200 space-y-3">
+                {messages.length > 0 ? (
+                    messages.map((msg) => (
+                        <div key={msg.id} className={`flex ${msg.userId === userId ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-xs p-3 rounded-lg shadow-sm ${msg.userId === userId ? 'bg-blue-500 text-white' : 'bg-gray-300 text-gray-800'}`}>
+                                <p className="text-sm">{msg.text}</p>
+                            </div>
+                        </div>
+                    ))
+                ) : (
+                    <p className="text-gray-500 text-center flex-grow flex items-center justify-center">No messages yet. Start the conversation!</p>
+                )}
+                <div ref={messagesEndRef} />
+            </div>
+            <form onSubmit={handleSendMessage} className="flex gap-2">
+                <input
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    className="flex-grow border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    placeholder="Type your message..."
+                />
+                <button
+                    type="submit"
+                    className="bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out hover:bg-blue-700"
+                >
+                    Send
+                </button>
+            </form>
+        </div>
+    );
+  };
+
   return (
     <div className="min-h-screen rally-bg font-inter text-gray-800 flex flex-col items-center justify-center relative">
       <style>
@@ -869,6 +966,7 @@ const App = () => {
             </div>
           </div>
           <WalkieTalkie db={db} userId={userId} isAuthReady={isAuthReady} showModal={showModal} storage={storage} />
+          <Chat db={db} userId={userId} isAuthReady={isAuthReady} showModal={showModal} />
           <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-3xl mt-8 border border-blue-200 text-center">
             <h2 className="text-2xl font-bold text-blue-700 mb-3">
               Developer Information
