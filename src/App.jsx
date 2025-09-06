@@ -581,9 +581,34 @@ const App = () => {
     const [currentlyPlaying, setCurrentlyPlaying] = useState(null);
     const audioPlayerRef = useRef(null);
     const [isLoading, setIsLoading] = useState(true);
+    const lastPlayedIdRef = useRef(null);
 
     const effectiveAppId = "faceattendancerealtime-fbdf2";
     const messagesRef = ref(db, `artifacts/${effectiveAppId}/public/data/voiceMessages`);
+
+    // Function to play audio from a download URL
+    const playAudio = (audioData, id) => {
+      if (currentlyPlaying) {
+        // Pause any currently playing audio
+        audioPlayerRef.current.pause();
+        setCurrentlyPlaying(null);
+      }
+
+      const audio = new Audio(audioData);
+      audioPlayerRef.current = audio;
+      setCurrentlyPlaying(id);
+      audio.play();
+
+      audio.onended = () => {
+        setCurrentlyPlaying(null);
+      };
+
+      audio.onerror = (err) => {
+        console.error("Error playing audio:", err);
+        showModal("Playback Error", "Failed to play the audio file.");
+        setCurrentlyPlaying(null);
+      };
+    };
 
     // Effect to fetch and listen for new voice messages
     useEffect(() => {
@@ -607,6 +632,14 @@ const App = () => {
         messages.sort((a, b) => b.timestamp - a.timestamp);
         setRecentMessages(messages);
         setIsLoading(false);
+
+        // Auto-play the newest message if it's not from the current user
+        const latestMessage = messages[0];
+        if (latestMessage && latestMessage.id !== lastPlayedIdRef.current && latestMessage.userId !== userId) {
+            playAudio(latestMessage.audio, latestMessage.id);
+            lastPlayedIdRef.current = latestMessage.id;
+        }
+
       }, (error) => {
         console.error("Error fetching voice messages:", error);
         setIsLoading(false);
@@ -672,30 +705,6 @@ const App = () => {
           setIsRecording(false);
         }
       }
-    };
-
-    // Function to play audio from a download URL
-    const playAudio = (audioData, id) => {
-      if (currentlyPlaying) {
-        // Pause any currently playing audio
-        audioPlayerRef.current.pause();
-        setCurrentlyPlaying(null);
-      }
-
-      const audio = new Audio(audioData);
-      audioPlayerRef.current = audio;
-      setCurrentlyPlaying(id);
-      audio.play();
-
-      audio.onended = () => {
-        setCurrentlyPlaying(null);
-      };
-
-      audio.onerror = (err) => {
-        console.error("Error playing audio:", err);
-        showModal("Playback Error", "Failed to play the audio file.");
-        setCurrentlyPlaying(null);
-      };
     };
 
     return (
